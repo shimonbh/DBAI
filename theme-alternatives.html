@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>D.B.A.I – Theme Alternatives</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #111; font-family: 'Segoe UI', system-ui, sans-serif; }
+
+/* ── Theme switcher bar ───────────────────── */
+.switcher {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px;
+  background: #111;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid #222;
+}
+.switcher-label { color: #666; font-size: 12px; align-self: center; margin-right: 4px; }
+.theme-btn {
+  padding: 7px 18px;
+  border-radius: 20px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  transition: all 0.15s;
+}
+
+/* ── App frame ────────────────────────────── */
+.app-frame {
+  display: none;
+  flex-direction: column;
+  height: calc(100vh - 57px);
+}
+.app-frame.visible { display: flex; }
+
+/* ── Common layout ───────────────────────── */
+.titlebar {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.titlebar-dots { display: flex; gap: 6px; }
+.dot { width: 12px; height: 12px; border-radius: 50%; }
+.dot.r { background: #ff5f57; }
+.dot.y { background: #ffbd2e; }
+.dot.g { background: #28c840; }
+.titlebar-logo {
+  margin: 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 3px;
+}
+.main { display: flex; flex: 1; overflow: hidden; }
+.left {
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.panel-tabs {
+  display: flex;
+}
+.ptab {
+  flex: 1;
+  padding: 9px 4px;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.panel-content { flex: 1; overflow-y: auto; padding: 8px 0; }
+.tg-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.tg-count {
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 9px;
+  margin-left: auto;
+}
+.ti {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px 4px 22px;
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 0 4px;
+  font-size: 12px;
+}
+.ti-icon { font-size: 11px; }
+.ti-name { flex: 1; }
+.ti.active-row { border: 1px solid; }
+.tc { display: flex; align-items: center; gap: 5px; padding: 2px 12px 2px 36px; font-size: 11px; }
+.tc-icon { font-size: 10px; width: 14px; text-align: center; }
+.tc-name { flex: 1; }
+.tc-type { font-size: 10px; border-radius: 3px; padding: 0 4px; }
+.editor-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.etabs { display: flex; flex-shrink: 0; overflow-x: auto; }
+.etab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  border-right: 1px solid;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+.etab.active { border-bottom-color: currentColor; }
+.tab-dot { width: 6px; height: 6px; border-radius: 50%; }
+.tab-x { font-size: 11px; margin-left: 2px; }
+.tabnew { padding: 8px 14px; font-size: 18px; cursor: pointer; }
+.ebody {
+  flex: 1;
+  padding: 16px;
+  font-family: 'Cascadia Code','Fira Code',Consolas,monospace;
+  font-size: 13px;
+  line-height: 1.75;
+  overflow: auto;
+  display: flex;
+  gap: 16px;
+}
+.lnum { color: #555; text-align: right; user-select: none; font-size: 12px; line-height: 1.75; min-width: 24px; }
+.code { flex: 1; }
+.cursor {
+  display: inline-block; width: 2px; height: 14px;
+  vertical-align: text-bottom; margin-left: 1px;
+  animation: blink 1.2s step-end infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+.rp { height: 190px; display: flex; flex-direction: column; flex-shrink: 0; }
+.rtabs { display: flex; align-items: center; padding: 0 12px; }
+.rtab { padding: 7px 12px; font-size: 11px; cursor: pointer; border-bottom: 2px solid transparent; }
+.runbtn {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-size: 11px; font-weight: 600; cursor: pointer;
+  border: 1px solid;
+}
+.rtable-wrap { overflow: auto; flex: 1; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead tr { position: sticky; top: 0; }
+th { padding: 6px 12px; text-align: left; font-size: 10px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; border-right: 1px solid; }
+td { padding: 5px 12px; border-bottom: 1px solid; border-right: 1px solid; }
+.sbar {
+  height: 22px;
+  display: flex; align-items: center; padding: 0 12px; gap: 14px;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.sbar-r { margin-left: auto; display: flex; gap: 14px; }
+.db-badge { border-radius: 3px; padding: 1px 6px; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; }
+.sdiv { width: 1px; height: 12px; }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="switcher">
+  <span class="switcher-label">Theme:</span>
+  <button class="theme-btn" id="btn-rose" onclick="show('rose')"
+    style="background:#26233a;color:#ebbcba;border-color:#403d52">🌸 Rosé Pine</button>
+  <button class="theme-btn" id="btn-dracula" onclick="show('dracula')"
+    style="background:#282a36;color:#bd93f9;border-color:#44475a">🧛 Dracula</button>
+  <button class="theme-btn" id="btn-light" onclick="show('light')"
+    style="background:#fff;color:#0969da;border-color:#d0d7de">☀️ Arc Light</button>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     THEME 1: ROSÉ PINE
+════════════════════════════════════════════════ -->
+<div class="app-frame visible" id="frame-rose" style="
+  --bg:      #191724;
+  --surface: #1f1d2e;
+  --overlay: #26233a;
+  --elevated:#312e45;
+  --border:  #403d52;
+  --tx:      #e0def4;
+  --muted:   #6e6a86;
+  --subtle:  #393552;
+  --love:    #eb6f92;
+  --gold:    #f6c177;
+  --rose:    #ebbcba;
+  --pine:    #31748f;
+  --foam:    #9ccfd8;
+  --iris:    #c4a7e7;
+  background: var(--bg); color: var(--tx);
+">
+  <div class="titlebar" style="background:var(--bg);border-bottom:1px solid var(--border)">
+    <div class="titlebar-dots"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div></div>
+    <div class="titlebar-logo" style="color:var(--rose);letter-spacing:4px;text-shadow:0 0 24px rgba(235,188,186,0.3)">D · B · A · I</div>
+    <div style="width:60px"></div>
+  </div>
+  <div class="main">
+    <div class="left" style="background:var(--surface);border-right:1px solid var(--border)">
+      <div class="panel-tabs" style="background:var(--bg);border-bottom:1px solid var(--border)">
+        <div class="ptab" style="color:var(--muted)">CONN</div>
+        <div class="ptab" style="color:var(--iris);border-bottom-color:var(--iris)">EXPLORER</div>
+        <div class="ptab" style="color:var(--muted)">QUERIES</div>
+      </div>
+      <div class="panel-content">
+        <div class="tg-header" style="color:var(--muted)">
+          ▾ <span>Tables</span>
+          <span class="tg-count" style="background:var(--elevated);color:var(--iris)">6</span>
+        </div>
+        <div class="ti active-row" style="background:rgba(196,167,231,0.07);border-color:rgba(196,167,231,0.2)">
+          <span class="ti-icon">📋</span>
+          <span class="ti-name" style="color:var(--foam)">Order Details</span>
+          <span style="font-size:10px;color:var(--iris)">▶</span>
+        </div>
+        <div class="tc"><span class="tc-icon" style="color:var(--gold)">🔑</span><span class="tc-name">OrderID</span><span class="tc-type" style="color:var(--gold);background:rgba(246,193,119,0.1)">INT</span></div>
+        <div class="tc"><span class="tc-icon" style="color:var(--muted)">◦</span><span class="tc-name">ProductID</span><span class="tc-type" style="color:var(--gold);background:rgba(246,193,119,0.1)">INT</span></div>
+        <div class="tc"><span class="tc-icon" style="color:var(--muted)">◦</span><span class="tc-name">UnitPrice</span><span class="tc-type" style="color:var(--gold);background:rgba(246,193,119,0.1)">DECIMAL</span></div>
+        <div class="tc"><span class="tc-icon" style="color:var(--muted)">◦</span><span class="tc-name">Quantity</span><span class="tc-type" style="color:var(--gold);background:rgba(246,193,119,0.1)">SMALLINT</span></div>
+        <div class="ti"><span class="ti-icon">📋</span><span class="ti-name" style="color:var(--foam)">Customers</span></div>
+        <div class="ti"><span class="ti-icon">📋</span><span class="ti-name" style="color:var(--foam)">Orders</span></div>
+        <div class="ti"><span class="ti-icon">📋</span><span class="ti-name" style="color:var(--foam)">Products</span></div>
+        <div class="ti"><span class="ti-icon">📋</span><span class="ti-name" style="color:var(--foam)">Employees</span></div>
+        <div class="tg-header" style="color:var(--muted);margin-top:6px">
+          ▾ <span>Views</span>
+          <span class="tg-count" style="background:var(--elevated);color:var(--iris)">2</span>
+        </div>
+        <div class="ti"><span class="ti-icon">👁</span><span class="ti-name" style="color:var(--iris)">Sales Summary</span></div>
+        <div class="ti"><span class="ti-icon">👁</span><span class="ti-name" style="color:var(--iris)">Top Customers</span></div>
+      </div>
+    </div>
+    <div class="editor-area">
+      <div class="etabs" style="background:var(--bg);border-bottom:1px solid var(--border)">
+        <div class="etab" style="color:var(--muted);border-right-color:var(--border)">Query 1<span class="tab-x" style="color:var(--subtle)">×</span></div>
+        <div class="etab active" style="color:var(--tx);background:var(--surface);border-right-color:var(--border);border-bottom-color:var(--rose)">
+          <div class="tab-dot" style="background:var(--love)"></div>Order Details<span class="tab-x" style="color:var(--muted)">×</span>
+        </div>
+        <div class="etab" style="color:var(--muted);border-right-color:var(--border)">Sales Analysis<span class="tab-x" style="color:var(--subtle)">×</span></div>
+        <div class="tabnew" style="color:var(--muted)">+</div>
+      </div>
+      <div class="ebody" style="background:var(--surface)">
+        <div class="lnum">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13</div>
+        <div class="code">
+          <span style="color:var(--muted);font-style:italic">-- Northwind Sales Analysis</span><br>
+          <span style="color:var(--love)">SELECT</span><br>
+          &nbsp;&nbsp;od.<span style="color:var(--gold)">OrderID</span>, p.<span style="color:var(--gold)">ProductName</span>,<br>
+          &nbsp;&nbsp;od.<span style="color:var(--gold)">UnitPrice</span> <span style="color:var(--love)">*</span> od.<span style="color:var(--gold)">Quantity</span> <span style="color:var(--love)">AS</span> <span style="color:var(--gold)">LineTotal</span>,<br>
+          &nbsp;&nbsp;<span style="color:var(--foam)">ROUND</span>(od.<span style="color:var(--gold)">UnitPrice</span> <span style="color:var(--love)">*</span> od.<span style="color:var(--gold)">Quantity</span> <span style="color:var(--love)">*</span><br>
+          &nbsp;&nbsp;&nbsp;&nbsp;(<span style="color:var(--iris)">1</span> <span style="color:var(--love)">-</span> od.<span style="color:var(--gold)">Discount</span>), <span style="color:var(--iris)">2</span>) <span style="color:var(--love)">AS</span> <span style="color:var(--gold)">NetAmount</span><br>
+          <span style="color:var(--love)">FROM</span> <span style="color:var(--pine)">"Order Details"</span> od<br>
+          <span style="color:var(--love)">JOIN</span> <span style="color:var(--pine)">Products</span> p <span style="color:var(--love)">ON</span> od.<span style="color:var(--gold)">ProductID</span> <span style="color:var(--love)">=</span> p.<span style="color:var(--gold)">ProductID</span><br>
+          <span style="color:var(--love)">WHERE</span> od.<span style="color:var(--gold)">UnitPrice</span> <span style="color:var(--love)">></span> <span style="color:var(--iris)">20</span><br>
+          &nbsp;&nbsp;<span style="color:var(--love)">AND</span> od.<span style="color:var(--gold)">Discount</span> <span style="color:var(--love)">></span> <span style="color:var(--iris)">0</span><br>
+          <span style="color:var(--love)">ORDER BY</span> <span style="color:var(--gold)">NetAmount</span> <span style="color:var(--love)">DESC</span><br>
+          <span style="color:var(--love)">LIMIT</span> <span style="color:var(--iris)">100</span><span class="cursor" style="background:var(--rose)"></span>
+        </div>
+      </div>
+      <div class="rp" style="background:var(--surface);border-top:1px solid var(--border)">
+        <div class="rtabs" style="background:var(--bg);border-bottom:1px solid var(--border)">
+          <div class="rtab" style="color:var(--iris);border-bottom-color:var(--iris)">Results</div>
+          <div class="rtab" style="color:var(--muted)">Messages</div>
+          <div class="rtab" style="color:var(--muted)">AI Explain</div>
+          <div class="runbtn" style="background:rgba(235,188,186,0.08);border-color:rgba(235,188,186,0.3);color:var(--rose)">▶ Run Query</div>
+        </div>
+        <div class="rtable-wrap">
+          <table>
+            <thead><tr style="background:var(--elevated)">
+              <th style="color:var(--foam);border-right-color:var(--border)">OrderID</th>
+              <th style="color:var(--foam);border-right-color:var(--border)">ProductName</th>
+              <th style="color:var(--foam);border-right-color:var(--border)">LineTotal</th>
+              <th style="color:var(--foam);border-right-color:var(--border)">Discount</th>
+              <th style="color:var(--foam);border-right-color:var(--border)">NetAmount</th>
+            </tr></thead>
+            <tbody>
+              <tr style="background:rgba(196,167,231,0.04)">
+                <td style="color:var(--iris);border-color:var(--border)">10372</td><td style="border-color:var(--border)">Côte de Blaye</td><td style="color:var(--iris);border-color:var(--border)">2,678.20</td><td style="color:var(--iris);border-color:var(--border)">0.25</td><td style="color:var(--iris);border-color:var(--border)">2,008.65</td>
+              </tr>
+              <tr><td style="color:var(--iris);border-color:var(--border)">10424</td><td style="border-color:var(--border)">Thüringer Rostbratwurst</td><td style="color:var(--iris);border-color:var(--border)">1,965.40</td><td style="color:var(--iris);border-color:var(--border)">0.20</td><td style="color:var(--iris);border-color:var(--border)">1,572.32</td></tr>
+              <tr><td style="color:var(--iris);border-color:var(--border)">10417</td><td style="border-color:var(--border)">Côte de Blaye</td><td style="color:var(--iris);border-color:var(--border)">1,606.92</td><td style="color:var(--iris);border-color:var(--border)">0.15</td><td style="color:var(--iris);border-color:var(--border)">1,365.88</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="sbar" style="background:var(--bg);border-top:1px solid var(--border)">
+    <span style="color:#31748f">● Connected</span>
+    <span class="sdiv" style="background:var(--border)"></span>
+    <span class="db-badge" style="background:rgba(156,207,216,0.1);border:1px solid rgba(156,207,216,0.2);color:var(--foam)">SQLite</span>
+    <span style="color:var(--muted)">northwind.db</span>
+    <div class="sbar-r">
+      <span style="color:var(--foam)">5 rows</span>
+      <span class="sdiv" style="background:var(--border)"></span>
+      <span style="color:var(--gold)">⚡ 12ms</span>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════
+     THEME 2: DRACULA
+════════════════════════════════════════════════ -->
+<div class="app-frame" id="frame-dracula" style="background:#282a36;color:#f8f8f2">
+  <div class="titlebar" style="background:#21222c;border-bottom:1px solid #44475a">
+    <div class="titlebar-dots"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div></div>
+    <div class="titlebar-logo" style="color:#ff79c6;letter-spacing:4px;text-shadow:0 0 20px rgba(255,121,198,0.4)">D · B · A · I</div>
+    <div style="width:60px"></div>
+  </div>
+  <div class="main">
+    <div class="left" style="background:#21222c;border-right:1px solid #44475a">
+      <div class="panel-tabs" style="background:#21222c;border-bottom:1px solid #44475a">
+        <div class="ptab" style="color:#6272a4">CONN</div>
+        <div class="ptab" style="color:#bd93f9;border-bottom-color:#bd93f9">EXPLORER</div>
+        <div class="ptab" style="color:#6272a4">QUERIES</div>
+      </div>
+      <div class="panel-content">
+        <div class="tg-header" style="color:#6272a4">▾ <span>Tables</span><span class="tg-count" style="background:#44475a;color:#8be9fd">6</span></div>
+        <div class="ti active-row" style="background:rgba(189,147,249,0.1);border-color:rgba(189,147,249,0.25)">
+          <span class="ti-icon">📋</span>
+          <span class="ti-name" style="color:#8be9fd">Order Details</span>
+          <span style="font-size:10px;color:#bd93f9">▶</span>
+        </div>
+        <div class="tc"><span class="tc-icon" style="color:#f1fa8c">🔑</span><span class="tc-name">OrderID</span><span class="tc-type" style="color:#ffb86c;background:rgba(255,184,108,0.1)">INT</span></div>
+        <div class="tc"><span class="tc-icon" style="color:#6272a4">◦</span><span class="tc-name">ProductID</span><span class="tc-type" style="color:#ffb86c;background:rgba(255,184,108,0.1)">INT</span></div>
+        <div class="tc"><span class="tc-icon" style="color:#6272a4">◦</span><span class="tc-name">UnitPrice</span><span class="tc-type" style="color:#ffb86c;background:rgba(255,184,108,0.1)">DECIMAL</span></div>
+        <div class="tc"><span class="tc-icon" style="color:#6272a4">◦</span><span class="tc-name">Quantity</span><span class="tc-type" style="color:#ffb86c;background:rgba(255,184,108,0.1)">SMALLINT</span></div>
+        <div class="ti"><span class="ti-icon">📋</span><span class="ti-name" style="color:#8be9fd">Customers</span></div>
+        <div class="ti"><span class="ti-icon">📋</span><span class="ti-name" style="color:#8be9fd">Orders</span></div>
+        <div class="ti"><span class="ti-icon">📋</span><span class="ti-name" style="color:#8be9fd">Products</span></div>
+        <div class="ti"><span class="ti-icon">📋</span><span class="ti-name" style="color:#8be9fd">Employees</span></div>
+        <div class="tg-header" style="color:#6272a4;margin-top:6px">▾ <span>Views</span><span class="tg-count" style="background:#44475a;color:#8be9fd">2</span></div>
+        <div class="ti"><span class="ti-icon">👁</span><span class="ti-name" style="color:#bd93f9">Sales Summary</span></div>
+        <div class="ti"><span class="ti-icon">👁</span><span class="ti-name" style="color:#bd93f9">Top Customers</span></div>
+      </div>
+    </div>
+    <div class="editor-area">
+      <div class="etabs" style="background:#21222c;border-bottom:1px solid #44475a">
+        <div class="etab" style="color:#6272a4;border-right-color:#44475a">Query 1<span class="tab-x">×</span></div>
+        <div class="etab active" style="color:#f8f8f2;background:#282a36;border-right-color:#44475a;border-bottom-color:#ff79c6">
+          <div class="tab-dot" style="background:#ff5555"></div>Order Details<span class="tab-x" style="color:#6272a4">×</span>
+        </div>
+        <div class="etab" style="color:#6272a4;border-right-color:#44475a">Sales Analysis<span class="tab-x">×</span></div>
+        <div class="tabnew" style="color:#6272a4">+</div>
+      </div>
+      <div class="ebody" style="background:#282a36">
+        <div class="lnum" style="color:#44475a">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13</div>
+        <div class="code">
+          <span style="color:#6272a4;font-style:italic">-- Northwind Sales Analysis</span><br>
+          <span style="color:#ff79c6">SELECT</span><br>
+          &nbsp;&nbsp;od.<span style="color:#f1fa8c">OrderID</span>, p.<span style="color:#f1fa8c">ProductName</span>,<br>
+          &nbsp;&nbsp;od.<span style="color:#f1fa8c">UnitPrice</span> <span style="color:#ff79c6">*</span> od.<span style="color:#f1fa8c">Quantity</span> <span style="color:#ff79c6">AS</span> <span style="color:#f1fa8c">LineTotal</span>,<br>
+          &nbsp;&nbsp;<span style="color:#8be9fd">ROUND</span>(od.<span style="color:#f1fa8c">UnitPrice</span> <span style="color:#ff79c6">*</span> od.<span style="color:#f1fa8c">Quantity</span> <span style="color:#ff79c6">*</span><br>
+          &nbsp;&nbsp;&nbsp;&nbsp;(<span style="color:#bd93f9">1</span> <span style="color:#ff79c6">-</span> od.<span style="color:#f1fa8c">Discount</span>), <span style="color:#bd93f9">2</span>) <span style="color:#ff79c6">AS</span> <span style="color:#f1fa8c">NetAmount</span><br>
+          <span style="color:#ff79c6">FROM</span> <span style="color:#50fa7b">"Order Details"</span> od<br>
+          <span style="color:#ff79c6">JOIN</span> <span style="color:#50fa7b">Products</span> p <span style="color:#ff79c6">ON</span> od.<span style="color:#f1fa8c">ProductID</span> = p.<span style="color:#f1fa8c">ProductID</span><br>
+          <span style="color:#ff79c6">WHERE</span> od.<span style="color:#f1fa8c">UnitPrice</span> > <span style="color:#bd93f9">20</span><br>
+          &nbsp;&nbsp;<span style="color:#ff79c6">AND</span> od.<span style="color:#f1fa8c">Discount</span> > <span style="color:#bd93f9">0</span><br>
+          <span style="color:#ff79c6">ORDER BY</span> <span style="color:#f1fa8c">NetAmount</span> <span style="color:#ff79c6">DESC</span><br>
+          <span style="color:#ff79c6">LIMIT</span> <span style="color:#bd93f9">100</span><span class="cursor" style="background:#f8f8f2"></span>
+        </div>
+      </div>
+      <div class="rp" style="background:#21222c;border-top:1px solid #44475a">
+        <div class="rtabs" style="background:#21222c;border-bottom:1px solid #44475a">
+          <div class="rtab" style="color:#bd93f9;border-bottom-color:#bd93f9">Results</div>
+          <div class="rtab" style="color:#6272a4">Messages</div>
+          <div class="rtab" style="color:#6272a4">AI Explain</div>
+          <div class="runbtn" style="background:rgba(80,250,123,0.08);border-color:rgba(80,250,123,0.3);color:#50fa7b">▶ Run Query</div>
+        </div>
+        <div class="rtable-wrap">
+          <table>
+            <thead><tr style="background:#44475a">
+              <th style="color:#8be9fd;border-color:#6272a4">OrderID</th>
+              <th style="color:#8be9fd;border-color:#6272a4">ProductName</th>
+              <th style="color:#8be9fd;border-color:#6272a4">LineTotal</th>
+              <th style="color:#8be9fd;border-color:#6272a4">Discount</th>
+              <th style="color:#8be9fd;border-color:#6272a4">NetAmount</th>
+            </tr></thead>
+            <tbody>
+              <tr style="background:rgba(189,147,249,0.05)">
+                <td style="color:#bd93f9;border-color:#44475a">10372</td><td style="border-color:#44475a">Côte de Blaye</td><td style="color:#bd93f9;border-color:#44475a">2,678.20</td><td style="color:#bd93f9;border-color:#44475a">0.25</td><td style="color:#bd93f9;border-color:#44475a">2,008.65</td>
+              </tr>
+              <tr><td style="color:#bd93f9;border-color:#44475a">10424</td><td style="border-color:#44475a">Thüringer Rostbratwurst</td><td style="color:#bd93f9;border-color:#44475a">1,965.40</td><td style="color:#bd93f9;border-color:#44475a">0.20</td><td style="color:#bd93f9;border-color:#44475a">1,572.32</td></tr>
+              <tr><td style="color:#bd93f9;border-color:#44475a">10417</td><td style="border-color:#44475a">Côte de Blaye</td><td style="color:#bd93f9;border-color:#44475a">1,606.92</td><td style="color:#bd93f9;border-color:#44475a">0.15</td><td style="color:#bd93f9;border-color:#44475a">1,365.88</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="sbar" style="background:#21222c;border-top:1px solid #44475a">
+    <span style="color:#50fa7b">● Connected</span>
+    <span class="sdiv" style="background:#44475a"></span>
+    <span class="db-badge" style="background:rgba(139,233,253,0.1);border:1px solid rgba(139,233,253,0.2);color:#8be9fd">SQLite</span>
+    <span style="color:#6272a4">northwind.db</span>
+    <div class="sbar-r">
+      <span style="color:#8be9fd">5 rows</span>
+      <span class="sdiv" style="background:#44475a"></span>
+      <span style="color:#ffb86c">⚡ 12ms</span>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════
+     THEME 3: ARC LIGHT
+════════════════════════════════════════════════ -->
+<div class="app-frame" id="frame-light" style="background:#f6f8fa;color:#1f2328">
+  <div class="titlebar" style="background:#f6f8fa;border-bottom:1px solid #d0d7de">
+    <div class="titlebar-dots"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div></div>
+    <div class="titlebar-logo" style="color:#0969da;letter-spacing:4px">D · B · A · I</div>
+    <div style="width:60px"></div>
+  </div>
+  <div class="main">
+    <div class="left" style="background:#fff;border-right:1px solid #d0d7de">
+      <div class="panel-tabs" style="background:#f6f8fa;border-bottom:1px solid #d0d7de">
+        <div class="ptab" style="color:#656d76">CONN</div>
+        <div class="ptab" style="color:#0969da;border-bottom-color:#0969da">EXPLORER</div>
+        <div class="ptab" style="color:#656d76">QUERIES</div>
+      </div>
+      <div class="panel-content">
+        <div class="tg-header" style="color:#656d76">▾ <span>Tables</span><span class="tg-count" style="background:#f6f8fa;color:#0969da;border:1px solid #d0d7de">6</span></div>
+        <div class="ti active-row" style="background:#dbeafe;border-color:#93c5fd">
+          <span class="ti-icon">📋</span>
+          <span class="ti-name" style="color:#1d4ed8;font-weight:600">Order Details</span>
+          <span style="font-size:10px;color:#0969da">▶</span>
+        </div>
+        <div class="tc"><span class="tc-icon" style="color:#b45309">🔑</span><span class="tc-name" style="color:#374151">OrderID</span><span class="tc-type" style="color:#6b7280;background:#f3f4f6;border:1px solid #e5e7eb">INT</span></div>
+        <div class="tc"><span class="tc-icon" style="color:#9ca3af">◦</span><span class="tc-name" style="color:#374151">ProductID</span><span class="tc-type" style="color:#6b7280;background:#f3f4f6;border:1px solid #e5e7eb">INT</span></div>
+        <div class="tc"><span class="tc-icon" style="color:#9ca3af">◦</span><span class="tc-name" style="color:#374151">UnitPrice</span><span class="tc-type" style="color:#6b7280;background:#f3f4f6;border:1px solid #e5e7eb">DECIMAL</span></div>
+        <div class="tc"><span class="tc-icon" style="color:#9ca3af">◦</span><span class="tc-name" style="color:#374151">Quantity</span><span class="tc-type" style="color:#6b7280;background:#f3f4f6;border:1px solid #e5e7eb">SMALLINT</span></div>
+        <div class="ti" style="color:#374151"><span class="ti-icon">📋</span><span class="ti-name" style="color:#1f2328">Customers</span></div>
+        <div class="ti" style="color:#374151"><span class="ti-icon">📋</span><span class="ti-name" style="color:#1f2328">Orders</span></div>
+        <div class="ti" style="color:#374151"><span class="ti-icon">📋</span><span class="ti-name" style="color:#1f2328">Products</span></div>
+        <div class="ti" style="color:#374151"><span class="ti-icon">📋</span><span class="ti-name" style="color:#1f2328">Employees</span></div>
+        <div class="tg-header" style="color:#656d76;margin-top:6px">▾ <span>Views</span><span class="tg-count" style="background:#f6f8fa;color:#0969da;border:1px solid #d0d7de">2</span></div>
+        <div class="ti"><span class="ti-icon">👁</span><span class="ti-name" style="color:#7c3aed">Sales Summary</span></div>
+        <div class="ti"><span class="ti-icon">👁</span><span class="ti-name" style="color:#7c3aed">Top Customers</span></div>
+      </div>
+    </div>
+    <div class="editor-area">
+      <div class="etabs" style="background:#f6f8fa;border-bottom:1px solid #d0d7de">
+        <div class="etab" style="color:#656d76;border-right-color:#d0d7de">Query 1<span class="tab-x" style="color:#d0d7de">×</span></div>
+        <div class="etab active" style="color:#1f2328;background:#fff;border-right-color:#d0d7de;border-bottom-color:#0969da">
+          <div class="tab-dot" style="background:#cf222e"></div>Order Details<span class="tab-x" style="color:#656d76">×</span>
+        </div>
+        <div class="etab" style="color:#656d76;border-right-color:#d0d7de">Sales Analysis<span class="tab-x" style="color:#d0d7de">×</span></div>
+        <div class="tabnew" style="color:#656d76">+</div>
+      </div>
+      <div class="ebody" style="background:#fff">
+        <div class="lnum" style="color:#d0d7de">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13</div>
+        <div class="code">
+          <span style="color:#656d76;font-style:italic">-- Northwind Sales Analysis</span><br>
+          <span style="color:#cf222e;font-weight:600">SELECT</span><br>
+          &nbsp;&nbsp;od.<span style="color:#953800">OrderID</span>, p.<span style="color:#953800">ProductName</span>,<br>
+          &nbsp;&nbsp;od.<span style="color:#953800">UnitPrice</span> * od.<span style="color:#953800">Quantity</span> <span style="color:#cf222e">AS</span> <span style="color:#953800">LineTotal</span>,<br>
+          &nbsp;&nbsp;<span style="color:#8250df">ROUND</span>(od.<span style="color:#953800">UnitPrice</span> * od.<span style="color:#953800">Quantity</span> *<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;(<span style="color:#0550ae">1</span> - od.<span style="color:#953800">Discount</span>), <span style="color:#0550ae">2</span>) <span style="color:#cf222e">AS</span> <span style="color:#953800">NetAmount</span><br>
+          <span style="color:#cf222e">FROM</span> <span style="color:#116329">"Order Details"</span> od<br>
+          <span style="color:#cf222e">JOIN</span> <span style="color:#116329">Products</span> p <span style="color:#cf222e">ON</span> od.<span style="color:#953800">ProductID</span> = p.<span style="color:#953800">ProductID</span><br>
+          <span style="color:#cf222e">WHERE</span> od.<span style="color:#953800">UnitPrice</span> > <span style="color:#0550ae">20</span><br>
+          &nbsp;&nbsp;<span style="color:#cf222e">AND</span> od.<span style="color:#953800">Discount</span> > <span style="color:#0550ae">0</span><br>
+          <span style="color:#cf222e">ORDER BY</span> <span style="color:#953800">NetAmount</span> <span style="color:#cf222e">DESC</span><br>
+          <span style="color:#cf222e">LIMIT</span> <span style="color:#0550ae">100</span><span class="cursor" style="background:#0969da"></span>
+        </div>
+      </div>
+      <div class="rp" style="background:#fff;border-top:1px solid #d0d7de">
+        <div class="rtabs" style="background:#f6f8fa;border-bottom:1px solid #d0d7de">
+          <div class="rtab" style="color:#0969da;border-bottom-color:#0969da">Results</div>
+          <div class="rtab" style="color:#656d76">Messages</div>
+          <div class="rtab" style="color:#656d76">AI Explain</div>
+          <div class="runbtn" style="background:#0969da;border-color:#0969da;color:#fff;box-shadow:0 1px 3px rgba(9,105,218,0.3)">▶ Run Query</div>
+        </div>
+        <div class="rtable-wrap">
+          <table>
+            <thead><tr style="background:#f6f8fa">
+              <th style="color:#0969da;border-color:#d0d7de">OrderID</th>
+              <th style="color:#0969da;border-color:#d0d7de">ProductName</th>
+              <th style="color:#0969da;border-color:#d0d7de">LineTotal</th>
+              <th style="color:#0969da;border-color:#d0d7de">Discount</th>
+              <th style="color:#0969da;border-color:#d0d7de">NetAmount</th>
+            </tr></thead>
+            <tbody>
+              <tr style="background:#eff6ff">
+                <td style="color:#0550ae;border-color:#d0d7de">10372</td><td style="border-color:#d0d7de">Côte de Blaye</td><td style="color:#0550ae;border-color:#d0d7de">2,678.20</td><td style="color:#0550ae;border-color:#d0d7de">0.25</td><td style="color:#0550ae;border-color:#d0d7de">2,008.65</td>
+              </tr>
+              <tr><td style="color:#0550ae;border-color:#d0d7de">10424</td><td style="border-color:#d0d7de">Thüringer Rostbratwurst</td><td style="color:#0550ae;border-color:#d0d7de">1,965.40</td><td style="color:#0550ae;border-color:#d0d7de">0.20</td><td style="color:#0550ae;border-color:#d0d7de">1,572.32</td></tr>
+              <tr><td style="color:#0550ae;border-color:#d0d7de">10417</td><td style="border-color:#d0d7de">Côte de Blaye</td><td style="color:#0550ae;border-color:#d0d7de">1,606.92</td><td style="color:#0550ae;border-color:#d0d7de">0.15</td><td style="color:#0550ae;border-color:#d0d7de">1,365.88</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="sbar" style="background:#f6f8fa;border-top:1px solid #d0d7de">
+    <span style="color:#1a7f37">● Connected</span>
+    <span class="sdiv" style="background:#d0d7de"></span>
+    <span class="db-badge" style="background:#dbeafe;border:1px solid #93c5fd;color:#0969da">SQLite</span>
+    <span style="color:#656d76">northwind.db</span>
+    <div class="sbar-r">
+      <span style="color:#0969da">5 rows</span>
+      <span class="sdiv" style="background:#d0d7de"></span>
+      <span style="color:#b45309">⚡ 12ms</span>
+    </div>
+  </div>
+</div>
+
+<script>
+function show(name) {
+  document.querySelectorAll('.app-frame').forEach(f => f.classList.remove('visible'))
+  document.getElementById('frame-' + name).classList.add('visible')
+}
+</script>
+</body>
+</html>

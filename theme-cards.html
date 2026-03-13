@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>D.B.A.I – Card Layout</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #191724;
+  --surface:  #1f1d2e;
+  --card:     #26233a;
+  --elevated: #2e2a44;
+  --border:   rgba(255,255,255,0.06);
+  --tx:       #e0def4;
+  --muted:    #6e6a86;
+  --subtle:   #3b3752;
+
+  --love:     #eb6f92;
+  --gold:     #f6c177;
+  --rose:     #ebbcba;
+  --pine:     #31748f;
+  --foam:     #9ccfd8;
+  --iris:     #c4a7e7;
+  --green:    #9ccf9c;
+
+  --r:        10px;   /* card border radius */
+  --gap:      8px;    /* gap between cards */
+
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+  color: var(--tx);
+  background: var(--bg);
+}
+
+body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+/* ── Titlebar ────────────────────────────── */
+.titlebar {
+  height: 38px;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+.dots { display: flex; gap: 6px; }
+.dot { width: 12px; height: 12px; border-radius: 50%; }
+.dot.r { background: #ff5f57; }
+.dot.y { background: #ffbd2e; }
+.dot.g { background: #28c840; }
+.logo {
+  margin: 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: var(--rose);
+  text-shadow: 0 0 24px rgba(235,188,186,0.25);
+}
+
+/* ── Main layout ─────────────────────────── */
+.main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  padding: var(--gap);
+  gap: var(--gap);
+}
+
+/* ── Left sidebar ────────────────────────── */
+.sidebar {
+  width: 230px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Panel nav card ──────────────────────── */
+.nav-card {
+  background: var(--card);
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  display: flex;
+  padding: 4px;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.nav-btn {
+  flex: 1;
+  padding: 6px 4px;
+  border-radius: 7px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+.nav-btn.active {
+  background: var(--elevated);
+  color: var(--iris);
+}
+
+/* ── Tree group card ─────────────────────── */
+.group-card {
+  background: var(--card);
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.group-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex: 1;
+}
+.group-count {
+  background: var(--elevated);
+  color: var(--iris);
+  border-radius: 20px;
+  padding: 1px 8px;
+  font-size: 9px;
+  font-weight: 700;
+}
+.group-body { padding: 4px; }
+
+/* Tree items */
+.ti {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.1s;
+  user-select: none;
+}
+.ti:hover { background: var(--elevated); }
+.ti.active {
+  background: rgba(196,167,231,0.1);
+  border: 1px solid rgba(196,167,231,0.2);
+}
+.ti-ico { font-size: 11px; }
+.ti-name { flex: 1; }
+.ti-play { font-size: 9px; color: var(--iris); opacity: 0; }
+.ti:hover .ti-play { opacity: 1; }
+
+/* Column rows */
+.col-rows { padding: 0 4px 4px 4px; }
+.cr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 22px;
+  font-size: 11px;
+  border-radius: 5px;
+}
+.cr:hover { background: rgba(255,255,255,0.03); }
+.cr-ico { font-size: 10px; width: 14px; text-align: center; color: var(--muted); }
+.cr-name { flex: 1; color: var(--tx); }
+.cr-type {
+  font-size: 10px;
+  color: var(--gold);
+  background: rgba(246,193,119,0.1);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* ── Editor column ───────────────────────── */
+.editor-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Tabs card */
+.tabs-card {
+  background: var(--card);
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  gap: 3px;
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+.etab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.etab:hover { background: var(--elevated); color: var(--tx); }
+.etab.active {
+  background: var(--elevated);
+  color: var(--tx);
+  box-shadow: inset 0 -2px 0 var(--rose);
+}
+.tab-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--love); }
+.tab-x { font-size: 11px; color: var(--subtle); margin-left: 2px; }
+.tab-x:hover { color: var(--love); }
+.tabnew { padding: 6px 10px; font-size: 17px; color: var(--muted); cursor: pointer; margin-left: auto; }
+.tabnew:hover { color: var(--iris); }
+
+/* Editor card */
+.editor-card {
+  background: var(--card);
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  padding: 16px;
+  gap: 16px;
+  font-family: 'Cascadia Code','Fira Code',Consolas,monospace;
+  font-size: 13px;
+  line-height: 1.75;
+  min-height: 0;
+}
+.lnum { color: var(--subtle); text-align: right; user-select: none; font-size: 12px; line-height: 1.75; min-width: 24px; }
+.code { flex: 1; }
+.cursor {
+  display: inline-block; width: 2px; height: 14px;
+  background: var(--rose);
+  vertical-align: text-bottom; margin-left: 1px;
+  animation: blink 1.2s step-end infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* Results card */
+.results-card {
+  background: var(--card);
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  height: 210px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.results-header {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  gap: 2px;
+  flex-shrink: 0;
+}
+.rtab {
+  padding: 5px 12px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.rtab.active { background: var(--elevated); color: var(--iris); }
+.run-btn {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 14px;
+  background: rgba(235,188,186,0.1);
+  border: 1px solid rgba(235,188,186,0.25);
+  border-radius: 7px;
+  color: var(--rose);
+  font-size: 11px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s;
+}
+.run-btn:hover { background: rgba(235,188,186,0.18); }
+.table-wrap { overflow: auto; flex: 1; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead tr { position: sticky; top: 0; background: var(--elevated); }
+th { padding: 7px 12px; text-align: left; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--foam); border-right: 1px solid var(--border); }
+td { padding: 6px 12px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); }
+tr:hover td { background: rgba(255,255,255,0.02); }
+.hl td { background: rgba(196,167,231,0.05) !important; }
+
+/* Status bar */
+.statusbar {
+  height: 24px;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 14px;
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.sbar-r { margin-left: auto; display: flex; gap: 14px; }
+.db-badge {
+  background: rgba(156,207,216,0.1);
+  border: 1px solid rgba(156,207,216,0.2);
+  color: var(--foam);
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 9px; font-weight: 700;
+}
+.sdiv { width: 1px; height: 12px; background: var(--subtle); }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--subtle); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- Titlebar -->
+<div class="titlebar">
+  <div class="dots"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div></div>
+  <div class="logo">D · B · A · I</div>
+  <div style="width:60px"></div>
+</div>
+
+<div class="main">
+
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+
+    <!-- Nav tabs card -->
+    <div class="nav-card">
+      <div class="nav-btn">CONN</div>
+      <div class="nav-btn active">EXPLORER</div>
+      <div class="nav-btn">QUERIES</div>
+    </div>
+
+    <!-- Tables card -->
+    <div class="group-card">
+      <div class="group-header">
+        <span style="color:var(--muted);font-size:10px">▾</span>
+        <span class="group-title">Tables</span>
+        <span class="group-count">6</span>
+      </div>
+      <div class="group-body">
+
+        <!-- Active table -->
+        <div class="ti active">
+          <span class="ti-ico">📋</span>
+          <span class="ti-name" style="color:var(--foam)">Order Details</span>
+          <span class="ti-play">▶</span>
+        </div>
+        <div class="col-rows">
+          <div class="cr"><span class="cr-ico" style="color:var(--gold)">🔑</span><span class="cr-name">OrderID</span><span class="cr-type">INT</span></div>
+          <div class="cr"><span class="cr-ico">◦</span><span class="cr-name">ProductID</span><span class="cr-type">INT</span></div>
+          <div class="cr"><span class="cr-ico">◦</span><span class="cr-name">UnitPrice</span><span class="cr-type">DECIMAL</span></div>
+          <div class="cr"><span class="cr-ico">◦</span><span class="cr-name">Quantity</span><span class="cr-type">SMALLINT</span></div>
+          <div class="cr"><span class="cr-ico">◦</span><span class="cr-name">Discount</span><span class="cr-type">REAL</span></div>
+        </div>
+
+        <div class="ti"><span class="ti-ico">📋</span><span class="ti-name" style="color:var(--foam)">Customers</span><span class="ti-play">▶</span></div>
+        <div class="ti"><span class="ti-ico">📋</span><span class="ti-name" style="color:var(--foam)">Orders</span><span class="ti-play">▶</span></div>
+        <div class="ti"><span class="ti-ico">📋</span><span class="ti-name" style="color:var(--foam)">Products</span><span class="ti-play">▶</span></div>
+        <div class="ti"><span class="ti-ico">📋</span><span class="ti-name" style="color:var(--foam)">Employees</span><span class="ti-play">▶</span></div>
+        <div class="ti"><span class="ti-ico">📋</span><span class="ti-name" style="color:var(--foam)">Suppliers</span><span class="ti-play">▶</span></div>
+      </div>
+    </div>
+
+    <!-- Views card -->
+    <div class="group-card">
+      <div class="group-header">
+        <span style="color:var(--muted);font-size:10px">▾</span>
+        <span class="group-title">Views</span>
+        <span class="group-count">2</span>
+      </div>
+      <div class="group-body">
+        <div class="ti"><span class="ti-ico">👁</span><span class="ti-name" style="color:var(--iris)">Sales Summary</span><span class="ti-play">▶</span></div>
+        <div class="ti"><span class="ti-ico">👁</span><span class="ti-name" style="color:var(--iris)">Top Customers</span><span class="ti-play">▶</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Editor column ── -->
+  <div class="editor-col">
+
+    <!-- Tabs card -->
+    <div class="tabs-card">
+      <div class="etab" style="color:var(--muted)">Query 1 <span class="tab-x">×</span></div>
+      <div class="etab active">
+        <div class="tab-dot"></div>
+        Order Details
+        <span class="tab-x">×</span>
+      </div>
+      <div class="etab" style="color:var(--muted)">Sales Analysis <span class="tab-x">×</span></div>
+      <div class="tabnew">+</div>
+    </div>
+
+    <!-- Monaco card -->
+    <div class="editor-card">
+      <div class="lnum">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13</div>
+      <div class="code">
+        <span style="color:var(--muted);font-style:italic">-- Northwind Sales Analysis</span><br>
+        <span style="color:var(--love)">SELECT</span><br>
+        &nbsp;&nbsp;od.<span style="color:var(--gold)">OrderID</span>,
+        p.<span style="color:var(--gold)">ProductName</span>,<br>
+        &nbsp;&nbsp;od.<span style="color:var(--gold)">UnitPrice</span>
+        <span style="color:var(--love)">*</span>
+        od.<span style="color:var(--gold)">Quantity</span>
+        <span style="color:var(--love)">AS</span>
+        <span style="color:var(--gold)">LineTotal</span>,<br>
+        &nbsp;&nbsp;od.<span style="color:var(--gold)">Discount</span>,<br>
+        &nbsp;&nbsp;<span style="color:var(--foam)">ROUND</span>(od.<span style="color:var(--gold)">UnitPrice</span>
+        <span style="color:var(--love)">*</span>
+        od.<span style="color:var(--gold)">Quantity</span>
+        <span style="color:var(--love)">*</span>
+        (<span style="color:var(--iris)">1</span>
+        <span style="color:var(--love)">-</span>
+        od.<span style="color:var(--gold)">Discount</span>),
+        <span style="color:var(--iris)">2</span>)
+        <span style="color:var(--love)">AS</span>
+        <span style="color:var(--gold)">NetAmount</span><br>
+        <span style="color:var(--love)">FROM</span>
+        <span style="color:var(--pine)">"Order Details"</span> od<br>
+        <span style="color:var(--love)">JOIN</span>
+        <span style="color:var(--pine)">Products</span> p
+        <span style="color:var(--love)">ON</span>
+        od.<span style="color:var(--gold)">ProductID</span>
+        <span style="color:var(--love)">=</span>
+        p.<span style="color:var(--gold)">ProductID</span><br>
+        <span style="color:var(--love)">WHERE</span>
+        od.<span style="color:var(--gold)">UnitPrice</span>
+        <span style="color:var(--love)">></span>
+        <span style="color:var(--iris)">20</span><br>
+        &nbsp;&nbsp;<span style="color:var(--love)">AND</span>
+        od.<span style="color:var(--gold)">Discount</span>
+        <span style="color:var(--love)">></span>
+        <span style="color:var(--iris)">0</span><br>
+        <span style="color:var(--love)">ORDER BY</span>
+        <span style="color:var(--gold)">NetAmount</span>
+        <span style="color:var(--love)">DESC</span><br>
+        <span style="color:var(--love)">LIMIT</span>
+        <span style="color:var(--iris)">100</span><span class="cursor"></span>
+      </div>
+    </div>
+
+    <!-- Results card -->
+    <div class="results-card">
+      <div class="results-header">
+        <div class="rtab active">Results</div>
+        <div class="rtab">Messages</div>
+        <div class="rtab">AI Explain</div>
+        <div class="run-btn">▶ Run Query</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>OrderID</th><th>ProductName</th><th>LineTotal</th><th>Discount</th><th>NetAmount</th>
+          </tr></thead>
+          <tbody>
+            <tr class="hl">
+              <td style="color:var(--iris)">10372</td>
+              <td>Côte de Blaye</td>
+              <td style="color:var(--iris)">2,678.20</td>
+              <td style="color:var(--iris)">0.25</td>
+              <td style="color:var(--iris)">2,008.65</td>
+            </tr>
+            <tr>
+              <td style="color:var(--iris)">10424</td>
+              <td>Thüringer Rostbratwurst</td>
+              <td style="color:var(--iris)">1,965.40</td>
+              <td style="color:var(--iris)">0.20</td>
+              <td style="color:var(--iris)">1,572.32</td>
+            </tr>
+            <tr>
+              <td style="color:var(--iris)">10417</td>
+              <td>Côte de Blaye</td>
+              <td style="color:var(--iris)">1,606.92</td>
+              <td style="color:var(--iris)">0.15</td>
+              <td style="color:var(--iris)">1,365.88</td>
+            </tr>
+            <tr>
+              <td style="color:var(--iris)">10353</td>
+              <td>Mozzarella di Giovanni</td>
+              <td style="color:var(--iris)">1,234.00</td>
+              <td style="color:var(--iris)">0.20</td>
+              <td style="color:var(--iris)">987.20</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Status bar -->
+<div class="statusbar">
+  <span style="color:var(--green)">● Connected</span>
+  <span class="sdiv"></span>
+  <span class="db-badge">SQLite</span>
+  <span>northwind.db</span>
+  <div class="sbar-r">
+    <span style="color:var(--foam)">4 rows</span>
+    <span class="sdiv"></span>
+    <span style="color:var(--gold)">⚡ 9ms</span>
+    <span class="sdiv"></span>
+    <span>UTF-8</span>
+  </div>
+</div>
+
+</body>
+</html>

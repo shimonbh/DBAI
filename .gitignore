@@ -1,0 +1,108 @@
+# ============================================================
+#  Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.dist-info/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# mypy / ruff / pyright
+.mypy_cache/
+.ruff_cache/
+.pyright/
+
+# FAISS index & metadata (large binary files — regenerate locally)
+*.bin
+*.pkl
+
+# SQLite databases and WAL files
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-x-*
+
+# ============================================================
+#  JavaScript / Node
+# ============================================================
+node_modules/
+dist/
+.cache/
+
+# Vite
+dist-ssr/
+*.local
+
+# Build output
+build/
+out/
+
+# Package manager lock files (keep one — remove the others)
+# yarn.lock
+# pnpm-lock.yaml
+
+# dotenv
+.env
+.env.*
+!.env.example
+
+# ============================================================
+#  IDE / OS
+# ============================================================
+.vscode/
+.idea/
+*.suo
+*.user
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================================
+#  Project-specific
+# ============================================================
+
+# Claude Code local settings
+.claude/
+
+# TV images — large asset folder, distribute separately
+televisions/
+
+# Leftover pip / Windows artifacts
+=*
+nul
+
+# Backup / copy files
+* - Copy*
+*.bak
+*.tmp
+*.swp
+
+# One-off data/load files
+load.txt
