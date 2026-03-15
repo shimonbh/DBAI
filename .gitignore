@@ -88,6 +88,10 @@ desktop.ini
 #  Project-specific
 # ============================================================
 
+# Electron build output
+frontend/dist-electron/
+frontend/dist/
+
 # Claude Code local settings
 .claude/
 
