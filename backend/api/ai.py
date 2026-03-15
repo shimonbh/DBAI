@@ -36,8 +36,14 @@ class CompleteRequest(AIRequestBase):
     context: str                  # Current editor content / partial query
 
 
+class ConversationMessage(BaseModel):
+    role: str       # 'user' or 'assistant'
+    content: str    # raw text / SQL
+
+
 class TextToSQLRequest(AIRequestBase):
     description: str
+    history: list[ConversationMessage] | None = None
 
 
 class AnalyzeRequest(AIRequestBase):
@@ -77,10 +83,14 @@ async def complete_query(connection_id: str, req: CompleteRequest):
 
 @router.post("/{connection_id}/text-to-sql")
 async def text_to_sql(connection_id: str, req: TextToSQLRequest):
-    """Convert natural language description to SQL."""
+    """Convert natural language description to SQL (supports multi-turn history)."""
     db_type, schema_ctx = _get_context(connection_id, req.database)
     agent = TextToSQLAgent(db_type, schema_ctx)
-    sql = await agent.convert(req.description, req.provider, req.model)
+    history = (
+        [{"role": m.role, "content": m.content} for m in req.history]
+        if req.history else None
+    )
+    sql = await agent.convert(req.description, req.provider, req.model, history=history)
     return {"sql": sql}
 
 

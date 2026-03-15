@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    base: './',   // relative paths so Electron can load assets via file:// protocol
     resolve: {
       alias: { '@': path.resolve(__dirname, './src') },
     },

@@ -1,14 +1,26 @@
 import { useEffect } from 'react'
 import { AppShell } from './components/layout/AppShell'
 import { useConnectionStore } from './store/connectionStore'
-import { cssVars } from './theme'
+import { useUIStore } from './store/uiStore'
+import { DARK_COLORS, LIGHT_COLORS } from './theme'
 
-/** Root component — loads connection profiles and applies theme CSS variables. */
+/** Root component — loads connection profiles and applies dynamic theme CSS variables. */
 export default function App() {
   const loadProfiles = useConnectionStore(s => s.loadProfiles)
+  const isDark = useUIStore(s => s.isDark)
 
-  // Load saved connections on startup
   useEffect(() => { loadProfiles() }, [])
+
+  const c = isDark ? DARK_COLORS : LIGHT_COLORS
+  const cssVars = {
+    '--bg-primary':    c.bgPrimary,
+    '--bg-secondary':  c.bgSecondary,
+    '--bg-panel':      c.bgPanel,
+    '--text-primary':  c.textPrimary,
+    '--text-muted':    c.textMuted,
+    '--border-color':  c.borderColor,
+    '--accent-color':  c.accentColor,
+  }
 
   return (
     <div style={{ ...cssVars as React.CSSProperties, height: '100vh', overflow: 'hidden' }}>

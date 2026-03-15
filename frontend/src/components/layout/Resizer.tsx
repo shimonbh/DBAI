@@ -1,5 +1,4 @@
 import { useRef, useCallback } from 'react'
-import { theme } from '@/theme'
 
 interface Props {
   onResize: (delta: number) => void
@@ -35,20 +34,27 @@ export function Resizer({ onResize }: Props) {
   }, [onResize])
 
   return (
-    <div
-      style={styles.divider}
-      onMouseDown={onMouseDown}
-      title="Drag to resize"
-    />
+    <div style={S.divider} onMouseDown={onMouseDown} title="Drag to resize">
+      <div style={S.grip} />
+    </div>
   )
 }
 
-const styles = {
+const S = {
   divider: {
-    width: 4,
-    cursor: 'col-resize',
-    background: theme.borderColor,
+    width: 8,
     flexShrink: 0,
-    transition: 'background 0.1s',
+    cursor: 'col-resize',
+    background: 'transparent',
+    display: 'flex' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  grip: {
+    width: 4,
+    height: 36,
+    borderRadius: 2,
+    background: 'var(--border-color)',
+    opacity: 0.7,
   },
 }

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { LeftPanel } from './LeftPanel'
 import { Resizer } from './Resizer'
+import { SettingsModal } from './SettingsModal'
 import { EditorPanel } from '@/components/editor/EditorPanel'
 import { MonitorPanel } from '@/components/monitor/MonitorPanel'
 import { ConnectionBadge } from '@/components/connection/ConnectionBadge'
@@ -15,7 +16,8 @@ import { theme } from '@/theme'
  *   └─────────────┴───┴──────────────────────────┘
  */
 export function AppShell() {
-  const [leftWidth, setLeftWidth] = useState(theme.leftPanelWidth)
+  const [leftWidth, setLeftWidth]       = useState(theme.leftPanelWidth)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const { isOpen: monitorOpen, toggleMonitor } = useMonitorStore()
 
   const handleResize = useCallback((delta: number) => {
@@ -31,13 +33,20 @@ export function AppShell() {
         <div style={styles.topBarRight}>
           <button
             style={{
-              ...styles.monitorBtn,
-              color: monitorOpen ? theme.accentColor : theme.textMuted,
+              ...styles.iconBtn,
+              color: monitorOpen ? 'var(--accent-color)' : 'var(--text-muted)',
             }}
             onClick={toggleMonitor}
             title="Toggle DB Monitor"
           >
             📊 Monitor
+          </button>
+          <button
+            style={styles.iconBtn}
+            onClick={() => setSettingsOpen(v => !v)}
+            title="Settings"
+          >
+            ⚙️
           </button>
         </div>
       </div>
@@ -55,8 +64,7 @@ export function AppShell() {
         <div style={styles.rightArea}>
           {monitorOpen ? (
             <>
-              {/* Monitor takes top 40%; editor below */}
-              <div style={{ height: '40%', minHeight: 150, borderBottom: `1px solid ${theme.borderColor}` }}>
+              <div style={{ height: '40%', minHeight: 150, borderBottom: `1px solid var(--border-color)` }}>
                 <MonitorPanel />
               </div>
               <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -68,16 +76,19 @@ export function AppShell() {
           )}
         </div>
       </div>
+
+      {/* Settings modal */}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }
 
 const styles = {
-  root:        { display: 'flex' as const, flexDirection: 'column' as const, height: '100vh', background: theme.bgPrimary, color: theme.textPrimary, fontFamily: "'Segoe UI', system-ui, sans-serif" },
-  topBar:      { display: 'flex', alignItems: 'center', gap: 14, padding: '0 16px', height: 38, background: theme.bgSecondary, borderBottom: `1px solid ${theme.borderColor}`, flexShrink: 0 },
-  appName:     { fontWeight: 700, fontSize: 14, color: theme.accentColor, letterSpacing: 1 },
-  topBarRight: { marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' },
-  monitorBtn:  { background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, padding: '3px 8px', borderRadius: 4 },
-  main:        { flex: 1, display: 'flex' as const, overflow: 'hidden', minHeight: 0 },
+  root:        { display: 'flex' as const, flexDirection: 'column' as const, height: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontFamily: "'Segoe UI', system-ui, sans-serif" },
+  topBar:      { display: 'flex', alignItems: 'center', gap: 14, padding: '0 16px', height: 38, background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', flexShrink: 0 },
+  appName:     { fontWeight: 700, fontSize: 14, color: 'var(--accent-color)', letterSpacing: 1 },
+  topBarRight: { marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' },
+  iconBtn:     { background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, padding: '3px 8px', borderRadius: 4, color: 'var(--text-muted)' },
+  main:        { flex: 1, display: 'flex' as const, overflow: 'hidden', minHeight: 0, background: 'var(--bg-secondary)' },
   rightArea:   { flex: 1, display: 'flex' as const, flexDirection: 'column' as const, overflow: 'hidden', minWidth: 0 },
 }

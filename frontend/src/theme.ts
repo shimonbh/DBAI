@@ -48,3 +48,28 @@ export const cssVars: Record<string, string> = {
   '--border-color':  theme.borderColor,
   '--accent-color':  theme.accentColor,
 }
+
+/** Runtime color palettes for dark/light toggle */
+export const DARK_COLORS = {
+  bgPrimary:   '#1e1e2e',
+  bgSecondary: '#181825',
+  bgPanel:     '#313244',
+  textPrimary: '#cdd6f4',
+  textMuted:   '#6c7086',
+  borderColor: '#45475a',
+  accentColor: '#4f9cf9',
+  editorTheme: 'vs-dark' as const,
+}
+
+export const LIGHT_COLORS = {
+  bgPrimary:   '#f6f8fa',
+  bgSecondary: '#ffffff',
+  bgPanel:     '#eaeef2',
+  textPrimary: '#1f2328',
+  textMuted:   '#656d76',
+  borderColor: '#d0d7de',
+  accentColor: '#0969da',
+  editorTheme: 'vs' as const,
+}
+
+export type ColorPalette = typeof DARK_COLORS

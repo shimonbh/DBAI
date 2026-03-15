@@ -3,7 +3,6 @@ import { useQueryStore } from '@/store/queryStore'
 import { useConnectionStore } from '@/store/connectionStore'
 import { useEditorStore } from '@/store/editorStore'
 import { useUIStore } from '@/store/uiStore'
-import { aiService } from '@/services/aiService'
 import { extractTables } from '@/utils/sqlTables'
 import { theme } from '@/theme'
 import type { QueryHistoryEntry, SavedQuery } from '@/types/query'
@@ -18,36 +17,48 @@ const persistTags = (cid: string, t: TagMap) => localStorage.setItem(TAGS_KEY(ci
 // ── SQL normalisation for duplicate detection / active-tab matching ──────────
 const normSql = (sql: string) => sql.trim().replace(/\s+/g, ' ').toLowerCase()
 
-// Warm gold — marks the item matching the active editor tab (distinct from purple multi-select)
+// Warm gold — marks the item matching the active editor tab
 const ACTIVE_TAB_CLR = '#f9e2af'
 
 // ── TreeGroup ─────────────────────────────────────────────────────────────────
-function TreeGroup({ label, count, muted, accent, defaultOpen = false, forceOpen = false, children }: {
+function TreeGroup({ label, count, muted, accent, defaultOpen = false, forceOpen = false, level = 0, children }: {
   label: string; count: number; muted?: boolean; accent?: boolean
-  defaultOpen?: boolean; forceOpen?: boolean; children: React.ReactNode
+  defaultOpen?: boolean; forceOpen?: boolean; level?: number; children: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen || forceOpen)
 
-  // Re-open if a matching item appears in this group (e.g. switching editor tabs)
   useEffect(() => {
     if (forceOpen) setOpen(true)
   }, [forceOpen])
 
+  const isInner = level > 0
   return (
     <div>
-      <div style={gS.header} onClick={() => setOpen(v => !v)}>
+      <div
+        style={{
+          ...gS.header,
+          paddingLeft: 10 + level * 12,
+          background: isInner ? theme.bgSecondary : theme.bgPanel,
+        }}
+        onClick={() => setOpen(v => !v)}
+      >
         <span style={gS.arrow}>{open ? '▾' : '▸'}</span>
-        <span style={{ ...gS.label, color: accent ? theme.textMuted : muted ? theme.textMuted : theme.textPrimary, fontStyle: accent ? 'italic' as const : 'normal' as const }}>{label}</span>
+        <span style={{
+          ...gS.label,
+          fontSize: isInner ? 11 : 12,
+          color: accent ? theme.textMuted : muted ? theme.textMuted : theme.textPrimary,
+          fontStyle: accent ? 'italic' as const : 'normal' as const,
+        }}>{label}</span>
         <span style={gS.badge}>{count}</span>
       </div>
-      {open && <div>{children}</div>}
+      {open && <div style={isInner ? { paddingLeft: 8 } : undefined}>{children}</div>}
     </div>
   )
 }
 const gS = {
-  header: { display: 'flex' as const, alignItems: 'center', gap: 5, padding: '5px 10px', cursor: 'pointer', userSelect: 'none' as const, borderBottom: `1px solid ${theme.borderColor}`, background: theme.bgPanel },
+  header: { display: 'flex' as const, alignItems: 'center', gap: 5, padding: '5px 10px', cursor: 'pointer', userSelect: 'none' as const, borderBottom: `1px solid ${theme.borderColor}` },
   arrow:  { fontSize: 10, color: theme.textMuted, width: 10, flexShrink: 0 },
-  label:  { flex: 1, fontSize: 12, fontWeight: 600 as const, overflow: 'hidden', whiteSpace: 'nowrap' as const, textOverflow: 'ellipsis' },
+  label:  { flex: 1, fontWeight: 600 as const, overflow: 'hidden', whiteSpace: 'nowrap' as const, textOverflow: 'ellipsis' },
   badge:  { fontSize: 10, color: theme.textMuted, background: theme.bgSecondary, borderRadius: 8, padding: '1px 6px', flexShrink: 0 },
 }
 
@@ -112,7 +123,7 @@ function HistoryItem({ entry, tag, selected, isActive, onOpen, onDelete, onSetTa
           <button style={iS.tagBtn} title="Tag this query" onClick={startEdit}>🏷</button>
         )}
         {hovered && !editingTag && onAISave && (
-          <button style={iS.aiBtn} title="AI Save this query" onClick={e => { e.stopPropagation(); onAISave() }}>🤖</button>
+          <button style={iS.aiBtn} title="Save this query" onClick={e => { e.stopPropagation(); onAISave() }}>🤖</button>
         )}
         {hovered && (
           <button style={iS.delBtn} title="Remove from history" onClick={e => { e.stopPropagation(); onDelete(entry.id) }}>✕</button>
@@ -162,13 +173,21 @@ function SavedItem({ q, isActive, onOpen, onUpdate, onDelete }: {
     e.stopPropagation()
     if (!editName.trim()) return
     setSaving(true)
-    try { await onUpdate(q.id, { name: editName.trim(), description: editDesc.trim() || undefined }); setEditing(false) }
+    try {
+      await onUpdate(q.id, {
+        name: editName.trim(),
+        description: editDesc.trim() || undefined,
+        sql_text: q.sql_text,   // required by backend SaveQueryIn
+        tags: q.tags,            // required by backend SaveQueryIn
+      })
+      setEditing(false)
+    }
     finally { setSaving(false) }
   }
 
   if (editing) {
     return (
-      <div style={{ ...svS.wrap, background: theme.bgSecondary }} onClick={e => e.stopPropagation()}>
+      <div style={{ ...svS.card, background: theme.bgSecondary }} onClick={e => e.stopPropagation()}>
         <input autoFocus style={{ ...svS.editInput, marginBottom: 5 }} value={editName} placeholder="Query name *"
           onChange={e => setEditName(e.target.value)} onKeyDown={e => e.key === 'Escape' && setEditing(false)} />
         <input style={svS.editInput} value={editDesc} placeholder="Description (optional)"
@@ -187,9 +206,10 @@ function SavedItem({ q, isActive, onOpen, onUpdate, onDelete }: {
     <div
       data-qid={q.id}
       style={{
-        ...svS.wrap,
-        background:  isActive ? `${ACTIVE_TAB_CLR}18` : hovered ? theme.bgSecondary : 'transparent',
-        borderLeft:  isActive ? `2px solid ${ACTIVE_TAB_CLR}` : '2px solid transparent',
+        ...svS.card,
+        background:   isActive ? `${ACTIVE_TAB_CLR}18` : hovered ? theme.bgPanel : theme.bgSecondary,
+        borderColor:  isActive ? ACTIVE_TAB_CLR : hovered ? theme.accentColor : theme.borderColor,
+        boxShadow:    hovered || isActive ? '0 2px 8px rgba(0,0,0,0.25)' : 'none',
       }}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       onClick={() => onOpen(q.sql_text, q.name)}>
@@ -203,14 +223,13 @@ function SavedItem({ q, isActive, onOpen, onUpdate, onDelete }: {
         )}
       </div>
       {q.description && <div style={svS.desc}>{q.description}</div>}
-      <div style={{ ...iS.sql, marginTop: 2 }}>{q.sql_text.slice(0, 80)}</div>
     </div>
   )
 }
 const svS = {
-  wrap:      { padding: '6px 10px', paddingLeft: 8, borderBottom: `1px solid ${theme.borderColor}`, borderLeft: '2px solid transparent', cursor: 'pointer', transition: 'background 0.1s, border-left-color 0.1s' },
-  name:      { flex: 1, fontSize: 13, fontWeight: 500 as const, color: theme.textPrimary, overflow: 'hidden', whiteSpace: 'nowrap' as const, textOverflow: 'ellipsis' },
-  desc:      { fontSize: 11, color: theme.textMuted, marginTop: 1 },
+  card:      { margin: '2px 6px', padding: '7px 10px', borderRadius: 8, border: `1px solid ${theme.borderColor}`, cursor: 'pointer', transition: 'background 0.15s, border-color 0.15s, box-shadow 0.15s', background: theme.bgSecondary },
+  name:      { flex: 1, fontSize: 12, fontWeight: 600 as const, color: theme.textPrimary, overflow: 'hidden', whiteSpace: 'nowrap' as const, textOverflow: 'ellipsis' },
+  desc:      { fontSize: 11, color: theme.textMuted, marginTop: 3, lineHeight: 1.4 },
   editInput: { width: '100%', background: theme.bgPanel, border: `1px solid ${theme.borderColor}`, borderRadius: 4, padding: '4px 7px', color: theme.textPrimary, fontSize: 12, outline: 'none', boxSizing: 'border-box' as const },
   editBtns:  { display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 6 },
   cancelBtn: { background: 'none', border: `1px solid ${theme.borderColor}`, borderRadius: 4, padding: '3px 9px', color: theme.textMuted, cursor: 'pointer', fontSize: 11 },
@@ -220,37 +239,25 @@ const svS = {
 // ── QueryExplorer (main) ──────────────────────────────────────────────────────
 export function QueryExplorer() {
   const [searchText, setSearchText] = useState('')
-
-  // ── Normal save form ───────────────────────────────────────────────────────
-  const [showSaveForm, setShowSaveForm] = useState(false)
-  const [saveName, setSaveName] = useState('')
-  const [saveDesc, setSaveDesc] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  // ── Multi-select + AI Save ─────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [showAiSaveForm, setShowAiSaveForm] = useState(false)
-  const [aiSaving, setAiSaving] = useState(false)
-  const [aiSaveProgress, setAiSaveProgress] = useState('')
-
-  // ── Tags ───────────────────────────────────────────────────────────────────
   const [tags, setTagsState] = useState<TagMap>({})
+  // ID of the specific saved query that is currently highlighted in the tree
+  const [activeQueryId, setActiveQueryId] = useState<string | null>(null)
 
-  const { activeConnectionId } = useConnectionStore()
-  const { history, saved, loadHistory, loadSaved, saveQuery, updateSaved, deleteHistory, deleteSaved } = useQueryStore()
+  const { activeConnectionId, profiles } = useConnectionStore(s => ({ activeConnectionId: s.activeConnectionId, profiles: s.profiles }))
+  const { history, saved, loadHistory, loadSaved, updateSaved, deleteHistory, deleteSaved } = useQueryStore()
   const { openTab, tabs, activeTabId } = useEditorStore(s => ({ openTab: s.openTab, tabs: s.tabs, activeTabId: s.activeTabId }))
-  const setLeftPanel = useUIStore(s => s.setLeftPanel)
+  const { setLeftPanel, openSavePanel, pendingScrollToId, clearPendingScroll } = useUIStore(s => ({
+    setLeftPanel:       s.setLeftPanel,
+    openSavePanel:      s.openSavePanel,
+    pendingScrollToId:  s.pendingScrollToId,
+    clearPendingScroll: s.clearPendingScroll,
+  }))
 
-  // Normalised SQL of the currently active editor tab — used to highlight the matching query in the panel
   const activeNorm = useMemo(() => {
     const sql = (tabs.find(t => t.id === activeTabId)?.sql ?? '').trim()
     return sql ? normSql(sql) : ''
   }, [tabs, activeTabId])
-
-  const getActiveSQL = () => {
-    const s = useEditorStore.getState()
-    return s.tabs.find(x => x.id === s.activeTabId)?.sql ?? ''
-  }
 
   useEffect(() => {
     if (!activeConnectionId) return
@@ -278,22 +285,49 @@ export function QueryExplorer() {
     })
   }, [])
 
-  // ── Saved tree ─────────────────────────────────────────────────────────────
-  const savedTableTree = useMemo(() => {
-    const map = new Map<string, SavedQuery[]>()
-    for (const q of saved) {
-      const keys = extractTables(q.sql_text)
-      const buckets = keys.length > 0 ? keys : ['\x00other']
-      for (const k of buckets) { const b = map.get(k) ?? []; b.push(q); map.set(k, b) }
-    }
-    return map
-  }, [saved])
+  // ── Saved tree: db → table → queries ───────────────────────────────────────
+  const savedDbTree = useMemo(() => {
+    // Extract a clean display name from a db path or name:
+    // strips leading path segments (both / and \) then strips file extension
+    const cleanDbName = (raw: string) =>
+      raw.trim().replace(/^.*[/\\]/, '').replace(/\.[^.]+$/, '').trim()
 
-  const savedTableKeys = useMemo(() => {
-    const ks = [...savedTableTree.keys()].filter(k => k !== '\x00other').sort()
-    if (savedTableTree.has('\x00other')) ks.push('\x00other')
+    // Level 1: group by database name
+    // Priority: profile.database (cleaned) → profile.name (cleaned) → '\x00noDb'
+    const dbMap = new Map<string, SavedQuery[]>()
+    for (const q of saved) {
+      const profile  = profiles.find(p => p.id === q.connection_id)
+      const dbKey    = (profile?.database && cleanDbName(profile.database))
+                    || (profile?.name     && cleanDbName(profile.name))
+                    || '\x00noDb'
+      const list     = dbMap.get(dbKey) ?? []
+      list.push(q)
+      dbMap.set(dbKey, list)
+    }
+    return dbMap
+  }, [saved, profiles])
+
+  const savedDbKeys = useMemo(() => {
+    const ks = [...savedDbTree.keys()].filter(k => k !== '\x00noDb').sort()
+    if (savedDbTree.has('\x00noDb')) ks.push('\x00noDb')
     return ks
-  }, [savedTableTree])
+  }, [savedDbTree])
+
+  // Build table-level map — each query goes under its PRIMARY (first) table only,
+  // so multi-table queries appear exactly once and only one card is ever highlighted.
+  const buildTableTree = (queries: SavedQuery[]) => {
+    const map = new Map<string, SavedQuery[]>()
+    for (const q of queries) {
+      const keys   = extractTables(q.sql_text)
+      const bucket = keys.length > 0 ? keys[0] : '\x00other'
+      const b = map.get(bucket) ?? []
+      b.push(q)
+      map.set(bucket, b)
+    }
+    const ks = [...map.keys()].filter(k => k !== '\x00other').sort()
+    if (map.has('\x00other')) ks.push('\x00other')
+    return { map, keys: ks }
+  }
 
   // ── Unsaved history: history entries not already saved, deduped ────────────
   const unsavedHistory = useMemo(() => {
@@ -330,72 +364,50 @@ export function QueryExplorer() {
     )
   }, [unsavedHistory, tags, searchText])
 
-  // ── Active match: which item corresponds to the current editor tab ──────────
-  const activeMatchId = useMemo(() => {
-    if (!activeNorm) return null
-    return (
-      saved.find(q => normSql(q.sql_text) === activeNorm)?.id ??
-      unsavedHistory.find(e => normSql(e.sql_text) === activeNorm)?.id ??
-      null
-    )
-  }, [activeNorm, saved, unsavedHistory])
-
-  // Switch to Queries panel and scroll to the matching item when the editor tab changes
+  // ── Active match — sync activeQueryId when the active tab changes ──────────
+  // Finds the first saved query whose SQL matches the active tab and marks it.
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout>>()
   useEffect(() => {
-    if (!activeMatchId) return
+    const matchId = activeNorm
+      ? saved.find(q => normSql(q.sql_text) === activeNorm)?.id ?? null
+      : null
+    setActiveQueryId(matchId)
+    if (!matchId) return
     setLeftPanel('queries')
     clearTimeout(scrollTimerRef.current)
     scrollTimerRef.current = setTimeout(() => {
-      document.querySelector(`[data-qid="${activeMatchId}"]`)
+      document.querySelector(`[data-qid="${matchId}"]`)
         ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     }, 180)
     return () => clearTimeout(scrollTimerRef.current)
   }, [activeTabId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Normal save ────────────────────────────────────────────────────────────
-  const handleSave = async () => {
-    if (!saveName.trim()) return
-    setSaving(true)
-    try {
-      await saveQuery({ name: saveName.trim(), description: saveDesc.trim() || undefined, sql_text: getActiveSQL(), connection_id: activeConnectionId ?? undefined })
-      setSaveName(''); setSaveDesc(''); setShowSaveForm(false)
-    } finally { setSaving(false) }
-  }
-
-  // ── AI Save ────────────────────────────────────────────────────────────────
-  const handleAISave = async () => {
-    if (!activeConnectionId || selectedIds.size === 0) return
-    setAiSaving(true)
-    const savedNorms = new Set(saved.map(q => normSql(q.sql_text)))
-    const entries = history.filter(e => selectedIds.has(e.id))
-    let done = 0; let skipped = 0
-    for (const e of entries) {
-      const norm = normSql(e.sql_text)
-      if (savedNorms.has(norm)) { skipped++; done++; continue }
-      setAiSaveProgress(`Saving ${done + 1 - skipped} / ${entries.length - skipped}…`)
-      try {
-        const { name, description } = await aiService.nameQuery(activeConnectionId, e.sql_text)
-        await saveQuery({ name, description, sql_text: e.sql_text, connection_id: activeConnectionId })
-        savedNorms.add(norm)
-      } catch { /* skip failed */ }
-      done++
-    }
-    setSelectedIds(new Set())
-    setShowAiSaveForm(false)
-    setAiSaving(false)
-    setAiSaveProgress('')
-  }
+  // ── Scroll to newly-saved query when SavePanel sets pendingScrollToId ───────
+  useEffect(() => {
+    if (!pendingScrollToId) return
+    setActiveQueryId(pendingScrollToId)
+    setLeftPanel('queries')
+    clearTimeout(scrollTimerRef.current)
+    scrollTimerRef.current = setTimeout(() => {
+      document.querySelector(`[data-qid="${pendingScrollToId}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      clearPendingScroll()
+    }, 200)
+    return () => clearTimeout(scrollTimerRef.current)
+  }, [pendingScrollToId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDeleteHistory = async (id: string) => {
     if (activeConnectionId) await deleteHistory(activeConnectionId, id)
   }
 
-  // Single-item AI Save: pre-select that item then open the AI Save panel
-  const handleSingleAISave = (id: string) => {
-    setSelectedIds(new Set([id]))
-    setShowAiSaveForm(true)
+  // Open the item's SQL in a new editor tab then open the Save Panel
+  const handleItemSave = (sql: string) => {
+    openTab(sql)
+    openSavePanel()
   }
+
+  const hasSel  = selectedIds.size > 0
+  const isEmpty = saved.length === 0 && history.length === 0
 
   const hp = (e: QueryHistoryEntry, indent = false) => ({
     entry: e, tag: tags[e.id], selected: selectedIds.has(e.id),
@@ -404,13 +416,9 @@ export function QueryExplorer() {
     onDelete: handleDeleteHistory,
     onSetTag: setTag,
     onToggleSelect: toggleSelect,
-    onAISave: () => handleSingleAISave(e.id),
+    onAISave: () => handleItemSave(e.sql_text),
     indent,
   })
-
-  const hasSel  = selectedIds.size > 0
-  const canSave = activeNorm !== ''           // Only enable Save when active tab has SQL
-  const isEmpty = saved.length === 0 && history.length === 0
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -419,85 +427,17 @@ export function QueryExplorer() {
       {/* Header */}
       <div style={S.header}>
         <span style={S.title}>Queries</span>
-        {hasSel ? (
-          <div style={S.aiSaveBtnGroup}>
-            <button style={S.aiSaveBtn} onClick={() => setShowAiSaveForm(v => !v)} title="AI-generate names and save selected queries">
-              🤖 AI Save ({selectedIds.size})
+        <div style={S.headerBtns}>
+          {hasSel && (
+            <button style={S.clearSelBtn} onClick={() => setSelectedIds(new Set())} title="Clear selection">
+              ✕ {selectedIds.size}
             </button>
-            <button style={S.clearSelBtn} onClick={() => setSelectedIds(new Set())} title="Clear selection">✕</button>
-          </div>
-        ) : (
-          <button
-            style={{ ...S.saveBtn, opacity: canSave ? 1 : 0.3, cursor: canSave ? 'pointer' : 'default' }}
-            onClick={() => canSave && setShowSaveForm(v => !v)}
-            title={canSave ? 'Save current query' : 'Open a query tab to save'}
-          >+ Save</button>
-        )}
-      </div>
-
-      {/* Normal save form */}
-      {showSaveForm && !hasSel && (
-        <div style={S.saveForm}>
-          <div style={S.saveFormSql}>{getActiveSQL().slice(0, 120) || '— no active query —'}</div>
-          <input style={S.saveInput} placeholder="Query name *" value={saveName} autoFocus onChange={e => setSaveName(e.target.value)} />
-          <input style={S.saveInput} placeholder="Description (optional)" value={saveDesc} onChange={e => setSaveDesc(e.target.value)} />
-          <div style={S.saveFormBtns}>
-            <button style={S.saveCancelBtn} onClick={() => setShowSaveForm(false)}>Cancel</button>
-            <button style={{ ...S.saveConfirmBtn, opacity: saveName.trim() ? 1 : 0.5 }} disabled={!saveName.trim() || saving} onClick={handleSave}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
+          )}
+          <button style={S.saveBtn} onClick={openSavePanel} title="Save current query">
+            💾 Save
+          </button>
         </div>
-      )}
-
-      {/* AI Save form */}
-      {showAiSaveForm && hasSel && (() => {
-        const selectedEntries = history.filter(e => selectedIds.has(e.id))
-        const savedNormsSet   = new Set(saved.map(q => normSql(q.sql_text)))
-        const batchNorms = new Set<string>()
-        const dupIds     = new Set<string>()
-        for (const e of selectedEntries) {
-          const n = normSql(e.sql_text)
-          if (savedNormsSet.has(n) || batchNorms.has(n)) dupIds.add(e.id)
-          else batchNorms.add(n)
-        }
-        const newCount = selectedEntries.length - dupIds.size
-        return (
-          <div style={S.aiSavePanel}>
-            <div style={S.aiSavePanelTitle}>
-              AI Save — {newCount} {newCount === 1 ? 'query' : 'queries'}
-              {dupIds.size > 0 && <span style={S.aiSaveDupHint}> ({dupIds.size} duplicate{dupIds.size > 1 ? 's' : ''} skipped)</span>}
-              <span style={S.aiSavePanelHint}>Names & descriptions will be generated automatically</span>
-            </div>
-            <div style={S.aiSaveList}>
-              {selectedEntries.map(e => {
-                const isDup = dupIds.has(e.id)
-                return (
-                  <div key={e.id} style={{ ...S.aiSaveRow, opacity: isDup ? 0.45 : 1 }}>
-                    <div style={S.aiSaveRowHeader}>
-                      <div style={S.aiSaveRowSql}>{e.sql_text.slice(0, 90)}</div>
-                      {isDup && <span style={S.aiSaveDupTag}>already saved</span>}
-                    </div>
-                    {!isDup && (
-                      <div style={S.aiSaveRowFields}>
-                        <input style={S.aiSaveGrayInput} placeholder="Auto Generated" disabled />
-                        <input style={S.aiSaveGrayInput} placeholder="Auto Generated" disabled />
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            <div style={S.aiSavePanelFooter}>
-              {aiSaveProgress && <span style={S.aiSaveProgressTxt}>{aiSaveProgress}</span>}
-              <button style={S.saveCancelBtn} onClick={() => setShowAiSaveForm(false)} disabled={aiSaving}>Cancel</button>
-              <button style={{ ...S.aiSaveConfirmBtn, opacity: aiSaving || newCount === 0 ? 0.5 : 1 }} disabled={aiSaving || newCount === 0} onClick={handleAISave}>
-                {aiSaving ? aiSaveProgress || 'Saving…' : `🤖 AI Save${newCount > 0 ? ` (${newCount})` : ''}`}
-              </button>
-            </div>
-          </div>
-        )
-      })()}
+      </div>
 
       {/* Search bar */}
       <div style={S.searchRow}>
@@ -517,7 +457,6 @@ export function QueryExplorer() {
           <div style={S.empty}>No queries yet.</div>
 
         ) : isSearching ? (
-          /* ── Search mode: flat results in two sections ── */
           filteredSaved.length === 0 && filteredUnsaved.length === 0
             ? <div style={S.empty}>No matching queries.</div>
             : <>
@@ -526,8 +465,8 @@ export function QueryExplorer() {
                     <div style={S.sectionLabel}>Saved</div>
                     {filteredSaved.map(q => (
                       <SavedItem key={q.id} q={q}
-                        isActive={activeNorm !== '' && normSql(q.sql_text) === activeNorm}
-                        onOpen={(sql, name) => openTab(sql, name)}
+                        isActive={q.id === activeQueryId}
+                        onOpen={(sql, name) => { setActiveQueryId(q.id); openTab(sql, name) }}
                         onUpdate={updateSaved}
                         onDelete={id => deleteSaved(id)}
                       />
@@ -543,30 +482,38 @@ export function QueryExplorer() {
               </>
 
         ) : (
-          /* ── Tree mode ── */
           <>
-            {/* Saved groups by table */}
-            {savedTableKeys.map(k => {
-              const groupItems = savedTableTree.get(k) ?? []
-              const groupHasActive = activeNorm !== '' && groupItems.some(q => normSql(q.sql_text) === activeNorm)
+            {savedDbKeys.map(dbKey => {
+              const dbQueries    = savedDbTree.get(dbKey) ?? []
+              const dbHasActive  = !!activeQueryId && dbQueries.some(q => q.id === activeQueryId)
+              const { map: tableMap, keys: tableKeys } = buildTableTree(dbQueries)
+              const dbLabel      = dbKey === '\x00noDb' ? '(unknown)' : dbKey
+
               return (
-                <TreeGroup key={k} label={k === '\x00other' ? '(other)' : k} count={groupItems.length} muted={k === '\x00other'} forceOpen={groupHasActive}>
-                  {groupItems.map(q => (
-                    <SavedItem key={q.id} q={q}
-                      isActive={activeNorm !== '' && normSql(q.sql_text) === activeNorm}
-                      onOpen={(sql, name) => openTab(sql, name)}
-                      onUpdate={updateSaved}
-                      onDelete={id => deleteSaved(id)}
-                    />
-                  ))}
+                <TreeGroup key={dbKey} label={dbLabel} count={dbQueries.length} muted={dbKey === '\x00noDb'} forceOpen={dbHasActive} defaultOpen>
+                  {tableKeys.map(tKey => {
+                    const tableItems     = tableMap.get(tKey) ?? []
+                    const tableHasActive = !!activeQueryId && tableItems.some(q => q.id === activeQueryId)
+                    return (
+                      <TreeGroup key={tKey} label={tKey === '\x00other' ? '(other)' : tKey} count={tableItems.length} muted={tKey === '\x00other'} forceOpen={tableHasActive} level={1}>
+                        {tableItems.map(q => (
+                          <SavedItem key={q.id} q={q}
+                            isActive={q.id === activeQueryId}
+                            onOpen={(sql, name) => { setActiveQueryId(q.id); openTab(sql, name) }}
+                            onUpdate={updateSaved}
+                            onDelete={id => deleteSaved(id)}
+                          />
+                        ))}
+                      </TreeGroup>
+                    )
+                  })}
                 </TreeGroup>
               )
             })}
 
-            {/* Unsaved Queries group */}
             {unsavedHistory.length > 0 && (
               <TreeGroup label="Unsaved Queries" count={unsavedHistory.length} accent
-                forceOpen={activeNorm !== '' && unsavedHistory.some(e => normSql(e.sql_text) === activeNorm)}>
+                forceOpen={!!activeQueryId && unsavedHistory.some(e => e.id === activeQueryId)}>
                 {unsavedHistory.map(e => <HistoryItem key={e.id} {...hp(e, true)} />)}
               </TreeGroup>
             )}
@@ -580,51 +527,16 @@ export function QueryExplorer() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const S = {
-  container:        { display: 'flex' as const, flexDirection: 'column' as const, height: '100%' },
-
-  // Header
-  header:           { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: `1px solid ${theme.borderColor}` },
-  title:            { fontSize: 12, fontWeight: 600 as const, color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 1 },
-
-  // Save button
-  saveBtn:          { background: 'none', border: 'none', color: theme.accentColor, cursor: 'pointer', fontSize: 12, padding: '2px 0', whiteSpace: 'nowrap' as const },
-
-  // AI Save button group
-  aiSaveBtnGroup:   { display: 'flex', alignItems: 'center', gap: 0 },
-  aiSaveBtn:        { background: 'none', border: 'none', color: '#cba6f7', cursor: 'pointer', fontSize: 12, padding: '2px 6px 2px 0', whiteSpace: 'nowrap' as const, fontWeight: 500 as const },
-  clearSelBtn:      { background: 'none', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 11, padding: '2px 0' },
-
-  // Normal save form
-  saveForm:         { borderBottom: `1px solid ${theme.borderColor}`, padding: '8px 10px', display: 'flex', flexDirection: 'column' as const, gap: 6 },
-  saveFormSql:      { fontSize: 10, color: theme.textMuted, fontFamily: "'JetBrains Mono', monospace", background: theme.bgPanel, borderRadius: 3, padding: '4px 6px', overflow: 'hidden', whiteSpace: 'nowrap' as const, textOverflow: 'ellipsis' },
-  saveInput:        { background: theme.bgSecondary, border: `1px solid ${theme.borderColor}`, borderRadius: 4, padding: '5px 8px', color: theme.textPrimary, fontSize: 12, outline: 'none', width: '100%', boxSizing: 'border-box' as const },
-  saveFormBtns:     { display: 'flex', gap: 6, justifyContent: 'flex-end' },
-  saveCancelBtn:    { background: 'none', border: `1px solid ${theme.borderColor}`, borderRadius: 4, padding: '4px 10px', color: theme.textMuted, cursor: 'pointer', fontSize: 12 },
-  saveConfirmBtn:   { background: theme.accentColor, border: 'none', borderRadius: 4, padding: '4px 10px', color: '#fff', cursor: 'pointer', fontSize: 12 },
-
-  // AI Save panel
-  aiSavePanel:      { borderBottom: `1px solid ${theme.borderColor}`, background: theme.bgPanel, padding: '10px', display: 'flex', flexDirection: 'column' as const, gap: 8 },
-  aiSavePanelTitle: { fontSize: 12, fontWeight: 600 as const, color: '#cba6f7', display: 'flex', flexDirection: 'column' as const, gap: 2 },
-  aiSavePanelHint:  { fontSize: 10, color: theme.textMuted, fontWeight: 400 as const },
-  aiSaveList:       { display: 'flex', flexDirection: 'column' as const, gap: 6, maxHeight: 180, overflowY: 'auto' as const },
-  aiSaveRow:        { background: theme.bgSecondary, borderRadius: 4, padding: '6px 8px', display: 'flex', flexDirection: 'column' as const, gap: 4 },
-  aiSaveRowHeader:  { display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' },
-  aiSaveRowSql:     { flex: 1, fontSize: 10, color: theme.textPrimary, fontFamily: "'JetBrains Mono', monospace", overflow: 'hidden', whiteSpace: 'nowrap' as const, textOverflow: 'ellipsis' },
-  aiSaveDupTag:     { fontSize: 9, color: theme.textMuted, background: theme.bgSecondary, borderRadius: 3, padding: '1px 5px', whiteSpace: 'nowrap' as const, flexShrink: 0 },
-  aiSaveDupHint:    { fontSize: 11, color: theme.textMuted, fontWeight: 400 as const },
-  aiSaveRowFields:  { display: 'flex', gap: 4 },
-  aiSaveGrayInput:  { flex: 1, background: theme.bgPanel, border: `1px solid ${theme.borderColor}`, borderRadius: 3, padding: '3px 6px', color: theme.textMuted, fontSize: 10, opacity: 0.5, fontStyle: 'italic' as const },
-  aiSavePanelFooter:{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' },
-  aiSaveProgressTxt:{ flex: 1, fontSize: 11, color: '#cba6f7' },
-  aiSaveConfirmBtn: { background: '#cba6f7', border: 'none', borderRadius: 4, padding: '4px 12px', color: '#1e1e2e', cursor: 'pointer', fontSize: 12, fontWeight: 600 as const },
-
-  // Search
-  searchRow:        { padding: '6px 10px', borderBottom: `1px solid ${theme.borderColor}`, display: 'flex', alignItems: 'center', gap: 4 },
-  searchInput:      { flex: 1, background: theme.bgSecondary, border: `1px solid ${theme.borderColor}`, borderRadius: 4, padding: '5px 8px', color: theme.textPrimary, fontSize: 11, outline: 'none' },
-  clearBtn:         { background: 'none', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 2px' },
-
-  // Layout
-  body:             { flex: 1, overflowY: 'auto' as const },
-  sectionLabel:     { padding: '5px 10px', fontSize: 10, fontWeight: 600 as const, color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.5, background: theme.bgPanel, borderBottom: `1px solid ${theme.borderColor}` },
-  empty:            { padding: 16, color: theme.textMuted, fontSize: 12, textAlign: 'center' as const },
+  container:    { display: 'flex' as const, flexDirection: 'column' as const, height: '100%' },
+  header:       { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: `1px solid ${theme.borderColor}` },
+  title:        { fontSize: 12, fontWeight: 600 as const, color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 1 },
+  headerBtns:   { display: 'flex', alignItems: 'center', gap: 6 },
+  saveBtn:      { background: 'none', border: 'none', color: theme.accentColor, cursor: 'pointer', fontSize: 12, padding: '2px 0', whiteSpace: 'nowrap' as const },
+  clearSelBtn:  { background: 'none', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 11, padding: '2px 0' },
+  searchRow:    { padding: '6px 10px', borderBottom: `1px solid ${theme.borderColor}`, display: 'flex', alignItems: 'center', gap: 4 },
+  searchInput:  { flex: 1, background: theme.bgSecondary, border: `1px solid ${theme.borderColor}`, borderRadius: 4, padding: '5px 8px', color: theme.textPrimary, fontSize: 11, outline: 'none' },
+  clearBtn:     { background: 'none', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 2px' },
+  body:         { flex: 1, overflowY: 'auto' as const },
+  sectionLabel: { padding: '5px 10px', fontSize: 10, fontWeight: 600 as const, color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.5, background: theme.bgPanel, borderBottom: `1px solid ${theme.borderColor}` },
+  empty:        { padding: 16, color: theme.textMuted, fontSize: 12, textAlign: 'center' as const },
 }

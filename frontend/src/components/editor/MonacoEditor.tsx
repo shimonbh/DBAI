@@ -5,6 +5,7 @@ import { theme } from '@/theme'
 import { useConnectionStore } from '@/store/connectionStore'
 import { useSchemaStore } from '@/store/schemaStore'
 import { useEditorStore } from '@/store/editorStore'
+import { useUIStore } from '@/store/uiStore'
 import { useAIAutocomplete } from '@/hooks/useAIAutocomplete'
 
 interface Props {
@@ -30,6 +31,8 @@ export function MonacoEditor({ tabId, sql, onChange }: Props) {
   const { selectedDatabase, databases } = useSchemaStore()
   const { inlineSuggestion, setInlineSuggestion, generateFullQuery } = useEditorStore()
   const { requestSuggestion } = useAIAutocomplete(activeConnectionId)
+  const isDark = useUIStore(s => s.isDark)
+  const editorTheme = isDark ? 'vs-dark' : 'vs'
 
   const dbType = profiles.find(p => p.id === activeConnectionId)?.db_type ?? 'sqlite'
 
@@ -50,7 +53,7 @@ export function MonacoEditor({ tabId, sql, onChange }: Props) {
       // ── Schema-based completion (tables + columns, instant, no AI) ───────────
       monaco.languages.registerCompletionItemProvider('sql', {
         triggerCharacters: [' ', '.', '('],
-        provideCompletionItems: (model, position) => {
+        provideCompletionItems: (model: Monaco.editor.ITextModel, position: Monaco.Position) => {
           const dbs = schemaRef.current
           const qt  = _quoteChar(dbTypeRef.current)
 
@@ -129,7 +132,7 @@ export function MonacoEditor({ tabId, sql, onChange }: Props) {
           return
         }
         // If the suggest widget is open, accept the highlighted item
-        const suggestCtrl = editor.getContribution<{ model?: { state: number } }>(
+        const suggestCtrl = editor.getContribution<{ dispose(): void; model?: { state: number } }>(
           'editor.contrib.suggestController'
         )
         if (suggestCtrl?.model?.state !== 0) {
@@ -208,7 +211,7 @@ export function MonacoEditor({ tabId, sql, onChange }: Props) {
       <MonacoReact
         height="100%"
         language="sql"
-        theme={theme.editorTheme}
+        theme={editorTheme}
         value={sql}
         onChange={handleChange}
         onMount={handleEditorMount}

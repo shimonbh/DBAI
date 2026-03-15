@@ -4,11 +4,17 @@ All values are read from environment variables (loaded from .env via python-dote
 See .env.example for all available options.
 """
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load .env from the project root (one level above backend/)
-_ROOT = Path(__file__).parent.parent
+# When frozen by PyInstaller, sys.executable is the binary itself.
+# Otherwise _ROOT is the project root (one level above backend/).
+if getattr(sys, "frozen", False):
+    _ROOT = Path(sys.executable).parent
+else:
+    _ROOT = Path(__file__).parent.parent
+
 load_dotenv(_ROOT / ".env")
 
 # ── Project Root & Data Directory ────────────────────────────────────────────
@@ -27,7 +33,9 @@ API_PORT = int(os.getenv("DBAI_PORT", "8000"))
 CORS_ORIGINS = [
     "http://localhost:15173",  # Vite dev server
     "http://localhost:3000",
-    "app://.",                 # Electron production
+    "http://127.0.0.1:8000",  # Electron production (direct calls)
+    "app://.",                 # Electron custom protocol (if used)
+    "null",                    # file:// origin used by Electron loadFile()
 ]
 
 # ── Query Execution ───────────────────────────────────────────────────────────

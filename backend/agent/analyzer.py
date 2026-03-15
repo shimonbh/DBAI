@@ -61,6 +61,11 @@ class QueryAnalyzerAgent:
         sugg_text   = _extract_section(raw, "Suggestions")
         improved    = _extract_section(raw, "Improved SQL")
 
+        # Strip any markdown code fences the LLM may have added (```sql ... ```)
+        improved = re.sub(r"^```(?:sql)?\s*\n?", "", improved.strip(), flags=re.IGNORECASE)
+        improved = re.sub(r"\n?```\s*$", "", improved.strip())
+        improved = improved.strip()
+
         return {
             "raw":          raw,
             "summary":      summary,

@@ -3,6 +3,7 @@ import type { EditorTab, QueryResult } from '@/types/query'
 import type { AnalysisResult } from '@/types/ai'
 import { queryService } from '@/services/queryService'
 import { aiService } from '@/services/aiService'
+import { stripSqlHeader } from '@/utils/sqlHeader'
 import { theme } from '@/theme'
 
 let _tabCounter = 1
@@ -22,12 +23,16 @@ interface EditorState {
 
   openTab: (sql?: string, title?: string) => string
   closeTab: (tabId: string) => void
+  moveTab: (fromIdx: number, toIdx: number) => void
+  closeTabsToRight: (tabId: string) => void
+  closeOtherTabs: (tabId: string) => void
   setActiveTab: (tabId: string) => void
   updateTabSql: (tabId: string, sql: string) => void
   updateTabDatabase: (tabId: string, db: string | null) => void
   setInlineSuggestion: (text: string | null) => void
   acceptSuggestion: (tabId: string) => void
   setResult: (tabId: string, result: QueryResult) => void
+  clearResult: (tabId: string) => void
   setAnalysis: (result: AnalysisResult | null) => void
   setQueryLimit: (limit: number) => void
 
@@ -80,6 +85,31 @@ export const useEditorStore = create<EditorState>((set, get) => {
         return { tabs: remaining, activeTabId: activeId }
       }),
 
+    moveTab: (fromIdx, toIdx) =>
+      set(s => {
+        if (fromIdx === toIdx) return {}
+        const tabs = [...s.tabs]
+        const [tab] = tabs.splice(fromIdx, 1)
+        tabs.splice(toIdx, 0, tab)
+        return { tabs }
+      }),
+
+    closeTabsToRight: (tabId) =>
+      set(s => {
+        const idx = s.tabs.findIndex(t => t.id === tabId)
+        if (idx === -1 || idx === s.tabs.length - 1) return {}
+        const newTabs = s.tabs.slice(0, idx + 1)
+        const activeStillExists = newTabs.some(t => t.id === s.activeTabId)
+        return { tabs: newTabs, activeTabId: activeStillExists ? s.activeTabId : tabId }
+      }),
+
+    closeOtherTabs: (tabId) =>
+      set(s => {
+        const tab = s.tabs.find(t => t.id === tabId)
+        if (!tab) return {}
+        return { tabs: [tab], activeTabId: tabId }
+      }),
+
     setActiveTab: (id) => set({ activeTabId: id }),
 
     updateTabSql: (tabId, sql) =>
@@ -106,6 +136,11 @@ export const useEditorStore = create<EditorState>((set, get) => {
     setResult: (tabId, result) =>
       set(s => ({
         tabs: s.tabs.map(t => t.id === tabId ? { ...t, result, isDirty: false } : t),
+      })),
+
+    clearResult: (tabId) =>
+      set(s => ({
+        tabs: s.tabs.map(t => t.id === tabId ? { ...t, result: null } : t),
       })),
 
     setAnalysis: (result) => set({ analysisResult: result }),
@@ -203,7 +238,9 @@ export const useEditorStore = create<EditorState>((set, get) => {
       if (!tab?.sql.trim()) return
       set({ isAnalyzing: true, analysisResult: null })
       try {
-        const result = await aiService.analyze(connectionId, tab.sql, {
+        // Strip the auto-generated header block so the AI only sees clean SQL
+        const cleanSql = stripSqlHeader(tab.sql)
+        const result = await aiService.analyze(connectionId, cleanSql, {
           database: tab.selectedDatabase ?? undefined,
         })
         set({ analysisResult: result })

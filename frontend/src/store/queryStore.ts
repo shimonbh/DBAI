@@ -10,7 +10,7 @@ interface QueryState {
   loadHistory: (connectionId: string) => Promise<void>
   searchHistory: (connectionId: string, q: string) => Promise<void>
   loadSaved: (connectionId?: string) => Promise<void>
-  saveQuery: (data: Partial<SavedQuery>) => Promise<void>
+  saveQuery: (data: Partial<SavedQuery>) => Promise<SavedQuery>
   updateSaved: (id: string, data: Partial<SavedQuery>) => Promise<void>
   deleteHistory: (connectionId: string, id: string) => Promise<void>
   deleteSaved: (id: string) => Promise<void>
@@ -45,6 +45,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   saveQuery: async (data) => {
     const saved = await queryService.saveQuery(data)
     set(s => ({ saved: [...s.saved, saved] }))
+    return saved
   },
 
   updateSaved: async (id, data) => {

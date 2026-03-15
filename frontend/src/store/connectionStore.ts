@@ -43,16 +43,24 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     // 2. Auto-reconnect the last used connection (persisted in localStorage)
     const lastId = getLastConn()
     if (lastId && profiles.find(p => p.id === lastId)) {
-      try {
-        await connectionService.connect(lastId)
-        set(s => ({
-          activeConnectionId: lastId,
-          profiles: s.profiles.map(p => ({ ...p, is_connected: p.id === lastId })),
-        }))
-      } catch {
-        // DB unavailable / moved — clear stored ID, let user connect manually
-        clearLastConn()
+      const tryConnect = async (attemptsLeft: number): Promise<void> => {
+        try {
+          await connectionService.connect(lastId)
+          set(s => ({
+            activeConnectionId: lastId,
+            profiles: s.profiles.map(p => ({ ...p, is_connected: p.id === lastId })),
+          }))
+        } catch (e) {
+          if (attemptsLeft > 0) {
+            // Backend may not be fully ready yet (ECONNRESET on startup) — retry once
+            await new Promise(r => setTimeout(r, 600))
+            return tryConnect(attemptsLeft - 1)
+          }
+          // DB unavailable / moved — clear stored ID, let user connect manually
+          clearLastConn()
+        }
       }
+      await tryConnect(1)
     }
   },
 

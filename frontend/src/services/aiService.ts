@@ -3,6 +3,9 @@ import type { AnalysisResult, AIProvider } from '@/types/ai'
 
 interface AIOverride { provider?: string; model?: string; database?: string }
 
+/** A single turn in an Ask AI conversation (sent to the backend as multi-turn context). */
+export interface ConversationMessage { role: 'user' | 'assistant'; content: string }
+
 export const aiService = {
   autocomplete: (connectionId: string, partialSql: string, opts: AIOverride = {}) =>
     api.post<{ suggestion: string }>(`/ai/${connectionId}/autocomplete`, {
@@ -12,7 +15,11 @@ export const aiService = {
   completeQuery: (connectionId: string, context: string, opts: AIOverride = {}) =>
     api.post<{ sql: string }>(`/ai/${connectionId}/complete`, { context, ...opts }).then(r => r.data.sql),
 
-  textToSQL: (connectionId: string, description: string, opts: AIOverride = {}) =>
+  textToSQL: (
+    connectionId: string,
+    description: string,
+    opts: AIOverride & { history?: ConversationMessage[] } = {},
+  ) =>
     api.post<{ sql: string }>(`/ai/${connectionId}/text-to-sql`, { description, ...opts }).then(r => r.data.sql),
 
   analyze: (connectionId: string, sql: string, opts: AIOverride = {}) =>

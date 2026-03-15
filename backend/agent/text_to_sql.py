@@ -18,14 +18,26 @@ class TextToSQLAgent:
         provider: str | None = None,
         model: str | None = None,
         max_tokens: int = 800,
+        history: list[dict] | None = None,
     ) -> str:
-        """Convert a natural language description to a SQL query."""
+        """Convert a natural language description to a SQL query.
+
+        When `history` is provided the conversation is multi-turn: previous
+        user/assistant messages are prepended so the AI can refine its answer.
+        """
         ai, model = AIProviderRegistry.get(provider, model)
         system = SYSTEM_SQL_EXPERT.format(
             db_type=self.db_type,
             schema_context=self.schema_context,
         )
-        user_msg = TEXT_TO_SQL.format(db_type=self.db_type, description=description)
-        messages = [{"role": "user", "content": user_msg}]
+
+        if history:
+            # Multi-turn: carry the prior conversation, append the new request
+            messages = [{"role": m["role"], "content": m["content"]} for m in history]
+            messages.append({"role": "user", "content": description})
+        else:
+            # First turn: use explicit instruction template
+            user_msg = TEXT_TO_SQL.format(db_type=self.db_type, description=description)
+            messages = [{"role": "user", "content": user_msg}]
 
         return await ai.complete(system, messages, model=model, max_tokens=max_tokens)

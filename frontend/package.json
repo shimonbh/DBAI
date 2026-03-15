@@ -29,6 +29,7 @@
     "concurrently": "^8.2.2",
     "electron": "^31.3.1",
     "electron-builder": "^24.13.3",
+    "monaco-editor": "^0.52.0",
     "typescript": "^5.5.3",
     "vite": "^5.3.4",
     "wait-on": "^7.2.0"
@@ -43,8 +44,19 @@
       "electron/dist/**/*",
       "dist/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "../run_server.py",
+        "to": "backend/run_server.py"
+      },
+      {
+        "from": "../backend",
+        "to": "backend/backend",
+        "filter": ["**/*.py", "!dist/**", "!build/**", "!**/__pycache__/**"]
+      }
+    ],
     "win": {
-      "target": "nsis",
+      "target": "dir",
       "icon": "public/icon.ico"
     },
     "mac": {

@@ -1,35 +1,105 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useState } from 'react'
 import { useEditorStore } from '@/store/editorStore'
 import { useConnectionStore } from '@/store/connectionStore'
-import { useSchemaStore } from '@/store/schemaStore'
 import { queryService } from '@/services/queryService'
 import { MonacoEditor } from './MonacoEditor'
-import { AIToolbar } from './AIToolbar'
-import { SuggestionPanel } from './SuggestionPanel'
 import { ResultsPane } from './ResultsPane'
-import { theme } from '@/theme'
+
+// ── Context-menu item with hover highlight ────────────────────────────────────
+function CtxItem({ label, disabled, onClick }: {
+  label: string; disabled?: boolean; onClick: () => void
+}) {
+  const [hov, setHov] = useState(false)
+  return (
+    <div
+      style={{
+        padding: '6px 14px', fontSize: 12,
+        cursor: disabled ? 'default' : 'pointer',
+        color: disabled ? 'var(--text-muted)' : 'var(--text-primary)',
+        background: !disabled && hov ? 'rgba(255,255,255,0.07)' : 'transparent',
+        userSelect: 'none' as const,
+      }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      onClick={disabled ? undefined : onClick}
+    >
+      {label}
+    </div>
+  )
+}
 
 /**
- * Right panel: multi-tab editor with AI toolbar, results pane, and analysis panel.
- * Supports drag-and-drop file import and Ctrl+Enter / F5 to run.
+ * Right panel: two rounded cards on a dark mat, separated by a draggable handle.
+ *   ┌─ Editor card (tab bar + Monaco) ──────────────────────┐
+ *   └────────────────────────────────────────────────────────┘
+ *   ═══ drag handle ════════════════════════════════════════
+ *   ┌─ Results card (Results / Messages / Ask AI / Analyze) ┐
+ *   └────────────────────────────────────────────────────────┘
  */
 export function EditorPanel() {
-  const { tabs, activeTabId, setActiveTab, openTab, closeTab, updateTabSql,
-          isAnalyzing, analyzeQuery } = useEditorStore()
+  const {
+    tabs, activeTabId, setActiveTab, openTab, closeTab,
+    moveTab, closeTabsToRight, closeOtherTabs,
+    updateTabSql, isExecuting,
+  } = useEditorStore()
   const { activeConnectionId } = useConnectionStore()
-  const { databases } = useSchemaStore()
   const dropRef = useRef<HTMLDivElement>(null)
 
-  // ── Keyboard shortcut: Ctrl+Enter → execute ──────────────────────────────
+  // Height of the editor card in pixels; results card takes the remainder
+  const [editorHeight, setEditorHeight] = useState(300)
+
+  // ── Right-click context menu ───────────────────────────────────────────────
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; tabId: string } | null>(null)
+  const closeCtxMenu = () => setCtxMenu(null)
+
+  const handleTabContextMenu = (e: React.MouseEvent, tabId: string) => {
+    e.preventDefault()
+    setCtxMenu({ x: e.clientX, y: e.clientY, tabId })
+  }
+
+  // ── Tab drag-to-reorder ────────────────────────────────────────────────────
+  const [dragSrcIdx, setDragSrcIdx]   = useState<number | null>(null)
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
+
+  const handleTabDragStart = (e: React.DragEvent, idx: number) => {
+    setDragSrcIdx(idx)
+    e.dataTransfer.effectAllowed = 'move'
+    // Custom MIME type ensures the container's .sql file-drop handler ignores this drag
+    e.dataTransfer.setData('application/tab-reorder', String(idx))
+  }
+  const handleTabDragOver = (e: React.DragEvent, idx: number) => {
+    if (dragSrcIdx === null || dragSrcIdx === idx) return
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverIdx(idx)
+  }
+  const handleTabDrop = (e: React.DragEvent, toIdx: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (dragSrcIdx !== null && dragSrcIdx !== toIdx) moveTab(dragSrcIdx, toIdx)
+    setDragSrcIdx(null)
+    setDragOverIdx(null)
+  }
+  const handleTabDragEnd = () => {
+    setDragSrcIdx(null)
+    setDragOverIdx(null)
+  }
+
+  const activeTab = tabs.find(t => t.id === activeTabId)
+
+  // Ctrl+Enter → execute or cancel query
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      if (activeConnectionId) {
-        useEditorStore.getState().executeQuery(activeConnectionId)
+      const store = useEditorStore.getState()
+      if (store.isExecuting) {
+        store.cancelQuery()
+      } else if (activeConnectionId) {
+        store.executeQuery(activeConnectionId)
       }
     }
   }, [activeConnectionId])
 
-  // ── Drag-and-drop .sql file import ────────────────────────────────────────
+  // Drag-and-drop .sql import
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault()
     const file = e.dataTransfer.files[0]
@@ -40,108 +110,220 @@ export function EditorPanel() {
     )
   }, [openTab])
 
-  const activeTab = tabs.find(t => t.id === activeTabId)
+  // Vertical drag handle between editor and results cards
+  const handleDividerDrag = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const startY = e.clientY
+    const startH = editorHeight
+    const containerH = dropRef.current?.clientHeight ?? 900
+    const DIVIDER = 8
+    const MIN_RESULTS = 80
+
+    const onMove = (ev: MouseEvent) => {
+      const maxH = containerH - DIVIDER - MIN_RESULTS
+      const next = Math.max(100, Math.min(maxH, startH + (ev.clientY - startY)))
+      setEditorHeight(next)
+    }
+    const onUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+
+    document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [editorHeight])
 
   return (
     <div
-      style={styles.container}
+      style={S.container}
       ref={dropRef}
       onKeyDown={handleKeyDown}
       onDragOver={e => e.preventDefault()}
       onDrop={handleDrop}
     >
-      {/* Tab bar */}
-      <div style={styles.tabBar}>
-        {tabs.map(tab => (
-          <div
-            key={tab.id}
-            style={{
-              ...styles.tab,
-              ...(tab.id === activeTabId ? styles.tabActive : {}),
-            }}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            <span style={styles.tabTitle}>
-              {tab.title}{tab.isDirty ? ' •' : ''}
-            </span>
-            {tabs.length > 1 && (
+      {/* ── Editor card ───────────────────────────────────────────────────── */}
+      <div style={{ ...S.card, height: editorHeight }}>
+
+        {/* Tab bar */}
+        <div style={S.tabBar}>
+
+          {/* Tabs — draggable + right-click menu */}
+          {tabs.map((tab, i) => (
+            <div
+              key={tab.id}
+              draggable
+              onDragStart={e => handleTabDragStart(e, i)}
+              onDragOver={e => handleTabDragOver(e, i)}
+              onDrop={e => handleTabDrop(e, i)}
+              onDragEnd={handleTabDragEnd}
+              onContextMenu={e => handleTabContextMenu(e, tab.id)}
+              style={{
+                ...S.tab,
+                ...(tab.id === activeTabId ? S.tabActive : {}),
+                opacity: dragSrcIdx === i ? 0.4 : 1,
+                // Accent inset shadow on left edge = drop-position indicator
+                boxShadow: dragOverIdx === i && dragSrcIdx !== i
+                  ? 'inset 2px 0 0 var(--accent-color)'
+                  : undefined,
+              }}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              <span style={S.tabTitle}>{tab.title}{tab.isDirty ? ' •' : ''}</span>
+              {tabs.length > 1 && (
+                <button style={S.tabClose} onClick={e => { e.stopPropagation(); closeTab(tab.id) }}>×</button>
+              )}
+            </div>
+          ))}
+
+          <button style={S.newTabBtn} onClick={() => openTab()} title="New tab">+</button>
+
+          {/* Right-side action buttons */}
+          <div style={S.tabBarRight}>
+            {isExecuting ? (
               <button
-                style={styles.tabClose}
-                onClick={e => { e.stopPropagation(); closeTab(tab.id) }}
-              >×</button>
+                style={S.stopBtn}
+                onClick={() => useEditorStore.getState().cancelQuery()}
+                title="Cancel running query"
+              >
+                ■ Stop
+              </button>
+            ) : (
+              <button
+                style={S.runBtn}
+                onClick={() => activeConnectionId && useEditorStore.getState().executeQuery(activeConnectionId)}
+                disabled={!activeConnectionId}
+                title="Run query (Ctrl+Enter)"
+              >
+                ▶ Run
+              </button>
             )}
           </div>
-        ))}
-        <button style={styles.newTabBtn} onClick={() => openTab()} title="New tab">+</button>
-
-        {/* Right side of tab bar: database selector + Analyze */}
-        <div style={styles.tabBarRight}>
-          {databases.length > 0 && (
-            <select
-              style={styles.dbSelect}
-              value={activeTab?.selectedDatabase ?? ''}
-              onChange={e => useEditorStore.getState().updateTabDatabase(activeTabId, e.target.value || null)}
-            >
-              <option value="">All databases</option>
-              {databases.map(db => (
-                <option key={db.name} value={db.name}>{db.name}</option>
-              ))}
-            </select>
-          )}
-
-          <button
-            style={styles.analyzeBtn}
-            onClick={() => activeConnectionId && analyzeQuery(activeConnectionId)}
-            disabled={isAnalyzing || !activeConnectionId}
-            title="Analyze query and suggest improvements"
-          >
-            {isAnalyzing ? '…' : '🔍 Analyze'}
-          </button>
         </div>
-      </div>
 
-      {/* AI Toolbar */}
-      <AIToolbar />
-
-      {/* Editor + Results split */}
-      {activeTab && (
-        <div style={styles.editorArea}>
-          {/* Editor */}
-          <div style={{ height: `${theme.editorHeightPct}%`, minHeight: 100 }}>
+        {/* Monaco editor fills the card */}
+        {activeTab && (
+          <div style={S.monacoWrap}>
             <MonacoEditor
               tabId={activeTab.id}
               sql={activeTab.sql}
               onChange={sql => updateTabSql(activeTab.id, sql)}
             />
           </div>
+        )}
+      </div>
 
-          {/* Analysis panel (collapsible) */}
-          <SuggestionPanel />
+      {/* ── Drag handle ──────────────────────────────────────────────────── */}
+      <div style={S.divider} onMouseDown={handleDividerDrag} title="Drag to resize">
+        <div style={S.dividerGrip} />
+      </div>
 
-          {/* Results */}
-          <div style={{ flex: 1, overflow: 'hidden' }}>
-            <ResultsPane tabId={activeTab.id} />
-          </div>
+      {/* ── Results card ─────────────────────────────────────────────────── */}
+      {activeTab && (
+        <div style={{ ...S.card, flex: 1 }}>
+          <ResultsPane tabId={activeTab.id} />
         </div>
       )}
 
-      {/* Drop zone hint */}
-      <div style={styles.dropHint}>Drop .sql file to import</div>
+      {/* Drop hint */}
+      <div style={S.dropHint}>Drop .sql file to import</div>
+
+      {/* ── Tab right-click context menu ─────────────────────────────────── */}
+      {ctxMenu && (() => {
+        const tabIdx = tabs.findIndex(t => t.id === ctxMenu.tabId)
+        const isOnly = tabs.length === 1
+        const isLast = tabIdx === tabs.length - 1
+
+        return (
+          <>
+            {/* Full-screen backdrop — click outside menu to close */}
+            <div style={S.ctxOverlay} onClick={closeCtxMenu} />
+            <div style={{ ...S.ctxMenu, left: ctxMenu.x, top: ctxMenu.y }}>
+              <CtxItem
+                label="Close"
+                disabled={isOnly}
+                onClick={() => { closeTab(ctxMenu.tabId); closeCtxMenu() }}
+              />
+              <CtxItem
+                label="Close Others"
+                disabled={isOnly}
+                onClick={() => { closeOtherTabs(ctxMenu.tabId); closeCtxMenu() }}
+              />
+              <CtxItem
+                label="Close to the Right"
+                disabled={isLast}
+                onClick={() => { closeTabsToRight(ctxMenu.tabId); closeCtxMenu() }}
+              />
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }
 
-const styles = {
-  container:   { display: 'flex' as const, flexDirection: 'column' as const, height: '100%', background: theme.bgPrimary, position: 'relative' as const },
-  tabBar:      { display: 'flex', alignItems: 'center', background: theme.bgSecondary, borderBottom: `1px solid ${theme.borderColor}`, overflowX: 'auto' as const, minHeight: 34 },
-  tab:         { display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', cursor: 'pointer', borderRight: `1px solid ${theme.borderColor}`, color: theme.textMuted, fontSize: 12, whiteSpace: 'nowrap' as const, flexShrink: 0 },
-  tabActive:   { background: theme.bgPrimary, color: theme.textPrimary, borderTop: `2px solid ${theme.accentColor}` },
-  tabTitle:    { maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' },
-  tabClose:    { background: 'none', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 2px' },
-  newTabBtn:   { background: 'none', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 18, padding: '0 10px', flexShrink: 0 },
-  tabBarRight: { display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', paddingRight: 8, flexShrink: 0 },
-  dbSelect:    { background: theme.bgPanel, border: `1px solid ${theme.borderColor}`, borderRadius: 3, color: theme.textPrimary, fontSize: 11, padding: '2px 6px', cursor: 'pointer' },
-  analyzeBtn:  { background: theme.bgPanel, border: `1px solid ${theme.borderColor}`, borderRadius: 3, color: theme.textPrimary, fontSize: 11, padding: '2px 8px', cursor: 'pointer', whiteSpace: 'nowrap' as const },
-  editorArea:  { flex: 1, display: 'flex' as const, flexDirection: 'column' as const, overflow: 'hidden', minHeight: 0 },
-  dropHint:    { position: 'absolute' as const, bottom: 6, right: 10, fontSize: 10, color: theme.textMuted, pointerEvents: 'none' as const },
+const CARD_BASE: React.CSSProperties = {
+  overflow: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
+  background: 'var(--bg-panel)',
+  borderRadius: 12,
+  border: '1px solid var(--border-color)',
+  boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+  minHeight: 0,
+  flexShrink: 0,
+}
+
+const S = {
+  // Dark outer mat
+  container: {
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    height: '100%',
+    boxSizing: 'border-box' as const,
+    background: 'var(--bg-secondary)',
+    padding: '8px 8px 8px 0',
+    gap: 0,
+    position: 'relative' as const,
+  },
+
+  card: CARD_BASE,
+
+  // Tab bar at top of the editor card
+  tabBar:     { display: 'flex', alignItems: 'center', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--border-color)', overflowX: 'auto' as const, minHeight: 34, flexShrink: 0, borderRadius: '12px 12px 0 0' },
+  tab:        { display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', cursor: 'pointer', borderRight: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: 12, whiteSpace: 'nowrap' as const, flexShrink: 0, borderTop: '2px solid transparent', userSelect: 'none' as const },
+  tabActive:  { background: 'var(--bg-panel)', color: 'var(--text-primary)', borderTop: '2px solid var(--accent-color)' },
+  tabTitle:   { maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' },
+  tabClose:   { background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 2px' },
+  newTabBtn:  { background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18, padding: '0 10px', flexShrink: 0 },
+  tabBarRight: { display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', paddingRight: 8, flexShrink: 0 },
+  runBtn:      { background: 'var(--accent-color)', border: 'none', borderRadius: 4, color: '#fff', fontSize: 11, padding: '3px 12px', cursor: 'pointer', fontWeight: 600 as const, whiteSpace: 'nowrap' as const },
+  stopBtn:     { background: '#e05555', border: 'none', borderRadius: 4, color: '#fff', fontSize: 11, padding: '3px 12px', cursor: 'pointer', fontWeight: 600 as const, whiteSpace: 'nowrap' as const },
+  monacoWrap: { flex: 1, minHeight: 0, overflow: 'hidden' },
+
+  // Draggable horizontal divider between the two cards
+  divider: {
+    height: 8,
+    flexShrink: 0,
+    cursor: 'row-resize',
+    display: 'flex' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dividerGrip: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    background: 'var(--border-color)',
+    opacity: 0.7,
+  },
+
+  dropHint: { position: 'absolute' as const, bottom: 14, right: 16, fontSize: 10, color: 'var(--text-muted)', pointerEvents: 'none' as const, opacity: 0.5 },
+
+  // Right-click context menu
+  ctxOverlay: { position: 'fixed' as const, inset: 0, zIndex: 9998 },
+  ctxMenu:    { position: 'fixed' as const, zIndex: 9999, minWidth: 170, padding: '4px 0', background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: 7, boxShadow: '0 6px 24px rgba(0,0,0,0.55)' },
 }

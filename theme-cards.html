@@ -347,51 +347,116 @@ tr:hover td { background: rgba(255,255,255,0.02); }
     <!-- Nav tabs card -->
     <div class="nav-card">
       <div class="nav-btn">CONN</div>
-      <div class="nav-btn active">EXPLORER</div>
-      <div class="nav-btn">QUERIES</div>
+      <div class="nav-btn">EXPLORER</div>
+      <div class="nav-btn active">QUERIES</div>
     </div>
 
-    <!-- Tables card -->
+    <!-- AI Save card -->
+    <div class="group-card" style="border-color:rgba(196,167,231,0.25);box-shadow:0 0 16px rgba(196,167,231,0.08)">
+      <div class="group-header" style="background:rgba(196,167,231,0.06)">
+        <span style="font-size:13px">🤖</span>
+        <span class="group-title" style="color:var(--iris)">AI Save</span>
+        <span style="font-size:10px;color:var(--muted);cursor:pointer">✕</span>
+      </div>
+      <div style="padding:10px 10px 6px">
+        <!-- Query preview -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;margin-bottom:8px;font-family:monospace;font-size:10px;color:var(--muted);line-height:1.5">
+          <span style="color:var(--love)">SELECT</span> od.OrderID,
+          p.ProductName,<br>
+          &nbsp;&nbsp;<span style="color:var(--foam)">ROUND</span>(UnitPrice <span style="color:var(--love)">*</span> Quantity …
+        </div>
+        <!-- Name row -->
+        <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">
+          <div style="flex:1">
+            <div style="font-size:9px;color:var(--muted);margin-bottom:3px;letter-spacing:0.5px;text-transform:uppercase">Name</div>
+            <div style="background:var(--bg);border:1px solid rgba(196,167,231,0.3);border-radius:6px;padding:5px 9px;font-size:12px;color:var(--tx)">
+              Sales Discount Analysis
+            </div>
+          </div>
+          <div style="margin-top:14px">
+            <div style="background:rgba(196,167,231,0.12);border:1px solid rgba(196,167,231,0.25);border-radius:6px;padding:5px 8px;font-size:10px;color:var(--iris);cursor:pointer;white-space:nowrap">✨ AI Name</div>
+          </div>
+        </div>
+        <!-- Description -->
+        <div style="margin-bottom:8px">
+          <div style="font-size:9px;color:var(--muted);margin-bottom:3px;letter-spacing:0.5px;text-transform:uppercase">Description</div>
+          <div style="background:var(--bg);border:1px solid rgba(196,167,231,0.3);border-radius:6px;padding:5px 9px;font-size:11px;color:var(--muted);line-height:1.5">
+            Calculates net order amounts after applying discounts, filtered for items over $20…
+          </div>
+        </div>
+        <!-- Actions -->
+        <div style="display:flex;gap:6px;justify-content:flex-end">
+          <div style="padding:5px 12px;border-radius:6px;font-size:11px;color:var(--muted);cursor:pointer;background:var(--bg);border:1px solid var(--border)">Cancel</div>
+          <div style="padding:5px 14px;border-radius:6px;font-size:11px;font-weight:600;color:var(--bg);cursor:pointer;background:var(--iris)">Save</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Saved queries card -->
     <div class="group-card">
       <div class="group-header">
         <span style="color:var(--muted);font-size:10px">▾</span>
-        <span class="group-title">Tables</span>
-        <span class="group-count">6</span>
+        <span class="group-title">Saved</span>
+        <span class="group-count">7</span>
       </div>
       <div class="group-body">
-
-        <!-- Active table -->
         <div class="ti active">
-          <span class="ti-ico">📋</span>
-          <span class="ti-name" style="color:var(--foam)">Order Details</span>
-          <span class="ti-play">▶</span>
+          <span style="font-size:11px">🔖</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;color:var(--foam)">Sales Discount Analysis</div>
+            <div style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">SELECT od.OrderID, p.ProductName…</div>
+          </div>
+          <span style="font-size:10px;color:var(--iris)">🤖</span>
         </div>
-        <div class="col-rows">
-          <div class="cr"><span class="cr-ico" style="color:var(--gold)">🔑</span><span class="cr-name">OrderID</span><span class="cr-type">INT</span></div>
-          <div class="cr"><span class="cr-ico">◦</span><span class="cr-name">ProductID</span><span class="cr-type">INT</span></div>
-          <div class="cr"><span class="cr-ico">◦</span><span class="cr-name">UnitPrice</span><span class="cr-type">DECIMAL</span></div>
-          <div class="cr"><span class="cr-ico">◦</span><span class="cr-name">Quantity</span><span class="cr-type">SMALLINT</span></div>
-          <div class="cr"><span class="cr-ico">◦</span><span class="cr-name">Discount</span><span class="cr-type">REAL</span></div>
+        <div class="ti">
+          <span style="font-size:11px">🔖</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;color:var(--foam)">Top Customers</div>
+            <div style="font-size:10px;color:var(--muted)">SELECT c.CustomerID…</div>
+          </div>
+          <span style="font-size:10px;color:var(--iris);opacity:0">🤖</span>
         </div>
-
-        <div class="ti"><span class="ti-ico">📋</span><span class="ti-name" style="color:var(--foam)">Customers</span><span class="ti-play">▶</span></div>
-        <div class="ti"><span class="ti-ico">📋</span><span class="ti-name" style="color:var(--foam)">Orders</span><span class="ti-play">▶</span></div>
-        <div class="ti"><span class="ti-ico">📋</span><span class="ti-name" style="color:var(--foam)">Products</span><span class="ti-play">▶</span></div>
-        <div class="ti"><span class="ti-ico">📋</span><span class="ti-name" style="color:var(--foam)">Employees</span><span class="ti-play">▶</span></div>
-        <div class="ti"><span class="ti-ico">📋</span><span class="ti-name" style="color:var(--foam)">Suppliers</span><span class="ti-play">▶</span></div>
+        <div class="ti">
+          <span style="font-size:11px">🔖</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;color:var(--foam)">Monthly Revenue</div>
+            <div style="font-size:10px;color:var(--muted)">SELECT strftime('%Y-%m'…</div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Views card -->
+    <!-- History card -->
     <div class="group-card">
       <div class="group-header">
         <span style="color:var(--muted);font-size:10px">▾</span>
-        <span class="group-title">Views</span>
-        <span class="group-count">2</span>
+        <span class="group-title">History</span>
+        <span class="group-count">36</span>
       </div>
       <div class="group-body">
-        <div class="ti"><span class="ti-ico">👁</span><span class="ti-name" style="color:var(--iris)">Sales Summary</span><span class="ti-play">▶</span></div>
-        <div class="ti"><span class="ti-ico">👁</span><span class="ti-name" style="color:var(--iris)">Top Customers</span><span class="ti-play">▶</span></div>
+        <div class="ti">
+          <span style="font-size:11px">🕓</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:10px;color:var(--muted)">SELECT * FROM "Order Details" LIMIT 100</div>
+            <div style="font-size:9px;color:var(--subtle)">2 min ago</div>
+          </div>
+          <span style="font-size:10px;color:var(--iris)">🤖</span>
+        </div>
+        <div class="ti">
+          <span style="font-size:11px">🕓</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:10px;color:var(--muted)">SELECT * FROM Customers LIMIT 100</div>
+            <div style="font-size:9px;color:var(--subtle)">14 min ago</div>
+          </div>
+          <span style="font-size:10px;color:var(--iris);opacity:0">🤖</span>
+        </div>
+        <div class="ti">
+          <span style="font-size:11px">🕓</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:10px;color:var(--muted)">SELECT COUNT(*) FROM Orders…</div>
+            <div style="font-size:9px;color:var(--subtle)">1 hr ago</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -463,47 +528,70 @@ tr:hover td { background: rgba(255,255,255,0.02); }
     <!-- Results card -->
     <div class="results-card">
       <div class="results-header">
-        <div class="rtab active">Results</div>
+        <div class="rtab">Results</div>
         <div class="rtab">Messages</div>
-        <div class="rtab">AI Explain</div>
+        <div class="rtab active" style="color:var(--iris)">Ask AI</div>
+        <div class="rtab">AI Analyze</div>
         <div class="run-btn">▶ Run Query</div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr>
-            <th>OrderID</th><th>ProductName</th><th>LineTotal</th><th>Discount</th><th>NetAmount</th>
-          </tr></thead>
-          <tbody>
-            <tr class="hl">
-              <td style="color:var(--iris)">10372</td>
-              <td>Côte de Blaye</td>
-              <td style="color:var(--iris)">2,678.20</td>
-              <td style="color:var(--iris)">0.25</td>
-              <td style="color:var(--iris)">2,008.65</td>
-            </tr>
-            <tr>
-              <td style="color:var(--iris)">10424</td>
-              <td>Thüringer Rostbratwurst</td>
-              <td style="color:var(--iris)">1,965.40</td>
-              <td style="color:var(--iris)">0.20</td>
-              <td style="color:var(--iris)">1,572.32</td>
-            </tr>
-            <tr>
-              <td style="color:var(--iris)">10417</td>
-              <td>Côte de Blaye</td>
-              <td style="color:var(--iris)">1,606.92</td>
-              <td style="color:var(--iris)">0.15</td>
-              <td style="color:var(--iris)">1,365.88</td>
-            </tr>
-            <tr>
-              <td style="color:var(--iris)">10353</td>
-              <td>Mozzarella di Giovanni</td>
-              <td style="color:var(--iris)">1,234.00</td>
-              <td style="color:var(--iris)">0.20</td>
-              <td style="color:var(--iris)">987.20</td>
-            </tr>
-          </tbody>
-        </table>
+
+      <!-- Ask AI tab content -->
+      <div style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+
+        <!-- Conversation history -->
+        <div style="flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px">
+
+          <!-- User message -->
+          <div style="display:flex;gap:8px;align-items:flex-start;justify-content:flex-end">
+            <div style="background:rgba(196,167,231,0.12);border:1px solid rgba(196,167,231,0.2);border-radius:10px 10px 3px 10px;padding:7px 12px;font-size:12px;color:var(--tx);max-width:80%">
+              Show me orders with discounts over 20% and their net totals
+            </div>
+            <div style="width:22px;height:22px;border-radius:50%;background:var(--iris);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;margin-top:2px">U</div>
+          </div>
+
+          <!-- AI response -->
+          <div style="display:flex;gap:8px;align-items:flex-start">
+            <div style="width:22px;height:22px;border-radius:50%;background:rgba(196,167,231,0.2);border:1px solid rgba(196,167,231,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:2px">🤖</div>
+            <div style="flex:1;min-width:0">
+              <div style="background:var(--elevated);border:1px solid var(--border);border-radius:3px 10px 10px 10px;padding:7px 12px;font-size:12px;color:var(--muted);margin-bottom:6px;line-height:1.5">
+                Here's a query that finds orders with discounts over 20% and calculates the net amount after discount:
+              </div>
+              <!-- Generated SQL block -->
+              <div style="background:var(--bg);border:1px solid rgba(196,167,231,0.2);border-radius:8px;overflow:hidden">
+                <div style="display:flex;align-items:center;padding:5px 10px;border-bottom:1px solid var(--border);gap:6px">
+                  <span style="font-size:10px;color:var(--muted);flex:1">Generated SQL</span>
+                  <span style="font-size:10px;color:var(--iris);cursor:pointer;background:rgba(196,167,231,0.1);padding:2px 8px;border-radius:4px;border:1px solid rgba(196,167,231,0.2)">↗ Open in editor</span>
+                  <span style="font-size:10px;color:var(--foam);cursor:pointer;background:rgba(156,207,216,0.1);padding:2px 8px;border-radius:4px;border:1px solid rgba(156,207,216,0.2)">▶ Run</span>
+                </div>
+                <div style="padding:8px 12px;font-family:monospace;font-size:11px;line-height:1.7;color:var(--muted)">
+                  <span style="color:var(--love)">SELECT</span> od.<span style="color:var(--gold)">OrderID</span>, p.<span style="color:var(--gold)">ProductName</span>,<br>
+                  &nbsp;&nbsp;od.<span style="color:var(--gold)">Discount</span>,<br>
+                  &nbsp;&nbsp;<span style="color:var(--foam)">ROUND</span>(od.<span style="color:var(--gold)">UnitPrice</span> <span style="color:var(--love)">*</span> od.<span style="color:var(--gold)">Quantity</span> <span style="color:var(--love)">*</span><br>
+                  &nbsp;&nbsp;&nbsp;&nbsp;(<span style="color:var(--iris)">1</span> <span style="color:var(--love)">-</span> od.<span style="color:var(--gold)">Discount</span>), <span style="color:var(--iris)">2</span>) <span style="color:var(--love)">AS</span> <span style="color:var(--gold)">NetAmount</span><br>
+                  <span style="color:var(--love)">FROM</span> <span style="color:var(--pine)">"Order Details"</span> od<br>
+                  <span style="color:var(--love)">JOIN</span> <span style="color:var(--pine)">Products</span> p <span style="color:var(--love)">ON</span> od.<span style="color:var(--gold)">ProductID</span> <span style="color:var(--love)">=</span> p.<span style="color:var(--gold)">ProductID</span><br>
+                  <span style="color:var(--love)">WHERE</span> od.<span style="color:var(--gold)">Discount</span> <span style="color:var(--love)">></span> <span style="color:var(--iris)">0.2</span><br>
+                  <span style="color:var(--love)">ORDER BY</span> <span style="color:var(--gold)">NetAmount</span> <span style="color:var(--love)">DESC</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Input bar -->
+        <div style="padding:8px 10px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0">
+          <div style="flex:1;background:var(--bg);border:1px solid rgba(196,167,231,0.25);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px">
+            <span style="font-size:13px">🤖</span>
+            <span>Describe what you want to query…</span>
+          </div>
+          <div style="display:flex;gap:5px;flex-shrink:0">
+            <div style="padding:7px 12px;border-radius:7px;font-size:11px;color:var(--muted);background:var(--elevated);border:1px solid var(--border);cursor:pointer">→ SQL</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:11px;color:var(--muted);background:var(--elevated);border:1px solid var(--border);cursor:pointer">Limit <span style="color:var(--iris)">300</span></div>
+            <div style="padding:7px 14px;border-radius:7px;font-size:11px;font-weight:600;color:var(--bg);background:var(--iris);cursor:pointer">▶ Run</div>
+          </div>
+        </div>
+
       </div>
     </div>
 
