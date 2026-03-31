@@ -2,8 +2,8 @@ import api from './api'
 import type { QueryResult, QueryHistoryEntry, SavedQuery } from '@/types/query'
 
 export const queryService = {
-  execute: (connectionId: string, sql: string, database?: string, limit = 300, signal?: AbortSignal) =>
-    api.post<QueryResult>(`/queries/${connectionId}/execute`, { sql, database, limit }, { signal }).then(r => r.data),
+  execute: (connectionId: string, sql: string, database?: string, limit = 300, signal?: AbortSignal, trackHistory = true) =>
+    api.post<QueryResult>(`/queries/${connectionId}/execute`, { sql, database, limit, track_history: trackHistory }, { signal }).then(r => r.data),
 
   getHistory: (connectionId: string, limit = 100) =>
     api.get<QueryHistoryEntry[]>(`/queries/${connectionId}/history`, { params: { limit } }).then(r => r.data),

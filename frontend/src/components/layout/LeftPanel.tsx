@@ -15,7 +15,7 @@ type PanelTab = 'connections' | 'explorer' | 'queries'
 const TABS: { id: PanelTab; label: string; icon: string }[] = [
   { id: 'connections', label: 'Connections', icon: '🔌' },
   { id: 'explorer',   label: 'Explorer',    icon: '🗄'  },
-  { id: 'queries',    label: 'Queries',     icon: '📄'  },
+  { id: 'queries',    label: 'Workspace',   icon: '📄'  },
 ]
 
 /** Left panel: pill segmented nav + rounded card content + optional SavePanel. */
@@ -23,7 +23,7 @@ export function LeftPanel() {
   const { leftPanel: active, setLeftPanel: setActive, savePanelOpen } = useUIStore()
   const { activeConnectionId } = useConnectionStore()
   const { tabs, activeTabId } = useEditorStore(s => ({ tabs: s.tabs, activeTabId: s.activeTabId }))
-  const { history, saved } = useQueryStore()
+  const { historyByConn, saved } = useQueryStore()
 
   // Auto-switch to Queries when the active editor tab matches a saved/history query
   useEffect(() => {
@@ -31,9 +31,10 @@ export function LeftPanel() {
     const sql = (tabs.find(t => t.id === activeTabId)?.sql ?? '').trim()
     if (!sql) return
     const norm = _norm(sql)
+    const allHistory = Object.values(historyByConn).flat()
     const hasMatch =
       saved.some(q => _norm(q.sql_text) === norm) ||
-      history.some(e => _norm(e.sql_text) === norm)
+      allHistory.some(e => _norm(e.sql_text) === norm)
     if (hasMatch) setActive('queries')
   }, [activeTabId]) // eslint-disable-line react-hooks/exhaustive-deps
 

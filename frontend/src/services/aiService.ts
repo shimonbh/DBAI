@@ -18,7 +18,7 @@ export const aiService = {
   textToSQL: (
     connectionId: string,
     description: string,
-    opts: AIOverride & { history?: ConversationMessage[] } = {},
+    opts: AIOverride & { history?: ConversationMessage[]; mode?: string } = {},
   ) =>
     api.post<{ sql: string }>(`/ai/${connectionId}/text-to-sql`, { description, ...opts }).then(r => r.data.sql),
 

@@ -21,6 +21,7 @@ class ExecuteRequest(BaseModel):
     sql: str
     database: str | None = None
     limit: int = DEFAULT_QUERY_LIMIT
+    track_history: bool = True
 
 
 class ExecuteResponse(BaseModel):
@@ -77,11 +78,12 @@ def execute_query(
         columns = list(rows_dict[0].keys()) if rows_dict else []
         rows = [list(r.values()) for r in rows_dict]
 
-        entry = repo.record_execution(
-            connection_id, req.sql, duration, len(rows)
-        )
+        entry_id = ""
+        if req.track_history:
+            entry = repo.record_execution(connection_id, req.sql, duration, len(rows))
+            entry_id = entry.id
         return ExecuteResponse(
-            query_id=entry.id,
+            query_id=entry_id,
             columns=columns,
             rows=rows,
             row_count=len(rows),
@@ -89,11 +91,14 @@ def execute_query(
         )
     except Exception as e:
         duration = _now_ms() - start_ms
-        entry = repo.record_execution(
-            connection_id, req.sql, duration, 0, error_message=str(e)
-        )
+        entry_id = ""
+        if req.track_history:
+            entry = repo.record_execution(
+                connection_id, req.sql, duration, 0, error_message=str(e)
+            )
+            entry_id = entry.id
         return ExecuteResponse(
-            query_id=entry.id,
+            query_id=entry_id,
             columns=[],
             rows=[],
             row_count=0,

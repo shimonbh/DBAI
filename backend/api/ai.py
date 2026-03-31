@@ -44,6 +44,7 @@ class ConversationMessage(BaseModel):
 class TextToSQLRequest(AIRequestBase):
     description: str
     history: list[ConversationMessage] | None = None
+    mode: str | None = None   # 'ask' | 'plan' | 'write' (default)
 
 
 class AnalyzeRequest(AIRequestBase):
@@ -90,7 +91,7 @@ async def text_to_sql(connection_id: str, req: TextToSQLRequest):
         [{"role": m.role, "content": m.content} for m in req.history]
         if req.history else None
     )
-    sql = await agent.convert(req.description, req.provider, req.model, history=history)
+    sql = await agent.convert(req.description, req.provider, req.model, history=history, mode=req.mode)
     return {"sql": sql}
 
 

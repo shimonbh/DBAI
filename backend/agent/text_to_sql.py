@@ -2,7 +2,7 @@
 TextToSQLAgent — converts natural language descriptions to SQL queries.
 """
 from backend.agent.registry import AIProviderRegistry
-from backend.agent.prompts import SYSTEM_SQL_EXPERT, TEXT_TO_SQL
+from backend.agent.prompts import SYSTEM_SQL_EXPERT, TEXT_TO_SQL, TEXT_TO_SQL_ASK, TEXT_TO_SQL_PLAN
 
 
 class TextToSQLAgent:
@@ -19,6 +19,7 @@ class TextToSQLAgent:
         model: str | None = None,
         max_tokens: int = 800,
         history: list[dict] | None = None,
+        mode: str | None = None,   # 'ask' | 'plan' | 'write' (default)
     ) -> str:
         """Convert a natural language description to a SQL query.
 
@@ -36,8 +37,14 @@ class TextToSQLAgent:
             messages = [{"role": m["role"], "content": m["content"]} for m in history]
             messages.append({"role": "user", "content": description})
         else:
-            # First turn: use explicit instruction template
-            user_msg = TEXT_TO_SQL.format(db_type=self.db_type, description=description)
+            # First turn: pick prompt template based on mode
+            if mode == 'ask':
+                tmpl = TEXT_TO_SQL_ASK
+            elif mode == 'plan':
+                tmpl = TEXT_TO_SQL_PLAN
+            else:
+                tmpl = TEXT_TO_SQL
+            user_msg = tmpl.format(db_type=self.db_type, description=description)
             messages = [{"role": "user", "content": user_msg}]
 
         return await ai.complete(system, messages, model=model, max_tokens=max_tokens)

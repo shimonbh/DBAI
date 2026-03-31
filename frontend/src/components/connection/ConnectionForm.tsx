@@ -19,20 +19,23 @@ const DB_TYPES: { value: DBType; label: string; defaultPort?: number }[] = [
 /** Modal form for creating / editing a connection profile. */
 export function ConnectionForm({ initial, onSave, onCancel, onTest }: Props) {
   const [data, setData] = useState<ConnectionFormData>({
-    name:     initial?.name     ?? '',
-    db_type:  initial?.db_type  ?? 'postgresql',
-    host:     initial?.host     ?? 'localhost',
-    port:     initial?.port,
-    database: initial?.database ?? '',
-    username: initial?.username ?? '',
-    password: initial?.password ?? '',
+    name:         initial?.name         ?? '',
+    db_type:      initial?.db_type      ?? 'postgresql',
+    host:         initial?.host         ?? 'localhost',
+    port:         initial?.port,
+    database:     initial?.database     ?? '',
+    username:     initial?.username     ?? '',
+    password:     initial?.password     ?? '',
+    windows_auth: initial?.windows_auth ?? false,
   })
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const isSQLite = data.db_type === 'sqlite'
+  const isSQLite    = data.db_type === 'sqlite'
+  const isMSSQL     = data.db_type === 'mssql'
+  const winAuth     = isMSSQL && !!data.windows_auth
 
   const set = (key: keyof ConnectionFormData, value: string | number | undefined) =>
     setData(d => ({ ...d, [key]: value }))
@@ -65,7 +68,7 @@ export function ConnectionForm({ initial, onSave, onCancel, onTest }: Props) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 380 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <label style={styles.label}>Name
         <input style={styles.input} value={data.name} onChange={e => set('name', e.target.value)} placeholder="My DB" />
       </label>
@@ -104,13 +107,29 @@ export function ConnectionForm({ initial, onSave, onCancel, onTest }: Props) {
             <input style={styles.input} value={data.database} onChange={e => set('database', e.target.value)} placeholder="my_database" />
           </label>
 
-          <label style={styles.label}>Username
-            <input style={styles.input} value={data.username} onChange={e => set('username', e.target.value)} placeholder="root" />
-          </label>
+          {isMSSQL && (
+            <label style={{ ...styles.label, flexDirection: 'row', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={!!data.windows_auth}
+                onChange={e => setData(d => ({ ...d, windows_auth: e.target.checked }))}
+                style={{ width: 14, height: 14, accentColor: theme.accentColor }}
+              />
+              <span style={{ fontSize: 13, color: theme.textPrimary }}>Windows Authentication</span>
+            </label>
+          )}
 
-          <label style={styles.label}>Password
-            <input style={styles.input} type="password" value={data.password} onChange={e => set('password', e.target.value)} />
-          </label>
+          {!winAuth && (
+            <>
+              <label style={styles.label}>Username
+                <input style={styles.input} value={data.username} onChange={e => set('username', e.target.value)} placeholder={isMSSQL ? 'DOMAIN\\user or sa' : 'root'} />
+              </label>
+
+              <label style={styles.label}>Password
+                <input style={styles.input} type="password" value={data.password} onChange={e => set('password', e.target.value)} />
+              </label>
+            </>
+          )}
         </>
       )}
 
@@ -121,12 +140,13 @@ export function ConnectionForm({ initial, onSave, onCancel, onTest }: Props) {
       )}
       {error && <div style={{ color: '#f38ba8', fontSize: 12 }}>{error}</div>}
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+      <div style={styles.actions}>
         {onTest && (
           <button style={styles.btnSecondary} onClick={handleTest} disabled={testing}>
-            {testing ? 'Testing…' : 'Test Connection'}
+            {testing ? 'Testing…' : 'Test'}
           </button>
         )}
+        <div style={{ flex: 1 }} />
         <button style={styles.btnSecondary} onClick={onCancel}>Cancel</button>
         <button style={styles.btnPrimary} onClick={handleSave} disabled={saving}>
           {saving ? 'Saving…' : 'Save'}
@@ -154,5 +174,10 @@ const styles = {
     background: theme.bgPanel, color: theme.textPrimary,
     border: `1px solid ${theme.borderColor}`, borderRadius: 4,
     padding: '6px 14px', cursor: 'pointer', fontSize: 13,
+  },
+  actions: {
+    display: 'flex' as const, alignItems: 'center', gap: 6, marginTop: 8,
+    position: 'sticky' as const, bottom: 0,
+    background: theme.bgSecondary, paddingTop: 8, paddingBottom: 4,
   },
 }

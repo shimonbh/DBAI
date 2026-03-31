@@ -39,8 +39,11 @@ CORS_ORIGINS = [
 ]
 
 # ── Query Execution ───────────────────────────────────────────────────────────
-DEFAULT_QUERY_LIMIT = int(os.getenv("DBAI_DEFAULT_QUERY_LIMIT", "1000"))
-QUERY_TIMEOUT_SEC   = int(os.getenv("DBAI_QUERY_TIMEOUT_SEC", "30"))
+DEFAULT_QUERY_LIMIT   = int(os.getenv("DBAI_DEFAULT_QUERY_LIMIT", "1000"))
+QUERY_TIMEOUT_SEC     = int(os.getenv("DBAI_QUERY_TIMEOUT_SEC", "30"))
+
+# ── Connection ────────────────────────────────────────────────────────────────
+CONNECTION_TIMEOUT_SEC = int(os.getenv("DBAI_CONNECTION_TIMEOUT_SEC", "20"))
 
 # ── Monitor ───────────────────────────────────────────────────────────────────
 MONITOR_POLL_INTERVAL_SEC = int(os.getenv("DBAI_MONITOR_POLL_INTERVAL_SEC", "2"))
@@ -58,6 +61,10 @@ GEMINI_DEFAULT_MODEL    = os.getenv("GEMINI_DEFAULT_MODEL", "gemini-2.0-flash")
 OPENROUTER_API_KEY      = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_DEFAULT_MODEL = os.getenv("OPENROUTER_DEFAULT_MODEL", "anthropic/claude-3.5-sonnet")
 OPENROUTER_BASE_URL     = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+
+LMSTUDIO_API_KEY        = os.getenv("LMSTUDIO_API_KEY", "lm-studio")   # any string; LM Studio ignores it
+LMSTUDIO_DEFAULT_MODEL  = os.getenv("LMSTUDIO_DEFAULT_MODEL", "")       # empty = use whatever is loaded
+LMSTUDIO_BASE_URL       = os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
 
 ACTIVE_AI_PROVIDER      = os.getenv("DBAI_ACTIVE_AI_PROVIDER", "anthropic")
 
@@ -82,5 +89,10 @@ PROVIDER_DEFAULTS: dict[str, dict] = {
         "api_key":       OPENROUTER_API_KEY,
         "default_model": OPENROUTER_DEFAULT_MODEL,
         "base_url":      OPENROUTER_BASE_URL,
+    },
+    "lmstudio": {
+        "api_key":       LMSTUDIO_API_KEY,
+        "default_model": LMSTUDIO_DEFAULT_MODEL,
+        "base_url":      LMSTUDIO_BASE_URL,
     },
 }

@@ -46,6 +46,16 @@ def get_columns(connection_id: str, database: str, table: str):
     return connector.get_columns(database, table)
 
 
+@router.get("/{connection_id}/{database}/security")
+def get_security(connection_id: str, database: str):
+    """Return users, roles and memberships for a database."""
+    connector = _get_connector(connection_id)
+    try:
+        return connector.get_security(database)
+    except Exception as e:
+        raise HTTPException(500, f"Security introspection failed: {e}") from e
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _get_connector(connection_id: str):
@@ -58,7 +68,10 @@ def _get_connector(connection_id: str):
 def _introspect_and_cache(connection_id: str) -> dict:
     connector = _get_connector(connection_id)
     introspector = SchemaIntrospector(connector)
-    schema = introspector.introspect()
+    try:
+        schema = introspector.introspect()
+    except Exception as e:
+        raise HTTPException(500, f"Schema introspection failed: {e}") from e
     for db_entry in schema.get("databases", []):
         SchemaCache.set(connection_id, db_entry["name"], {"databases": [db_entry]})
     return schema

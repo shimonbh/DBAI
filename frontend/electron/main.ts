@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'path'
 import http from 'http'
 import fs from 'fs'
@@ -111,17 +111,28 @@ function createWindow() {
       preload:          path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration:  false,
+      devTools:         true,   // keep enabled so F12 can toggle it
     },
   })
 
   if (isDev) {
     win.loadURL('http://localhost:15173')
-    win.webContents.openDevTools()
   } else {
     win.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'))
   }
 
   win.setMenuBarVisibility(false)
+
+  // F12 toggles DevTools open/closed
+  win.webContents.on('before-input-event', (_event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F12') {
+      if (win.webContents.isDevToolsOpened()) {
+        win.webContents.closeDevTools()
+      } else {
+        win.webContents.openDevTools()
+      }
+    }
+  })
 }
 
 // ── IPC Handlers ──────────────────────────────────────────────────────────────
@@ -133,6 +144,108 @@ ipcMain.handle('dialog:openFile', async () => {
   })
   if (result.canceled || !result.filePaths.length) return null
   return result.filePaths[0]
+})
+
+ipcMain.handle('dialog:selectFolder', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Select Export Destination',
+    properties: ['openDirectory', 'createDirectory'],
+  })
+  if (result.canceled || !result.filePaths.length) return null
+  return result.filePaths[0]
+})
+
+ipcMain.handle('shell:openPath', (_event, targetPath: string) => {
+  if (process.platform === 'win32') {
+    // spawn avoids cmd.exe shell — no quoting issues, no false-positive exit codes.
+    // explorer.exe always returns non-zero even on success, so exec/exec's error
+    // callback lies; spawn + unref is the correct pattern.
+    const child = spawn('explorer.exe', [targetPath], { detached: true, stdio: 'ignore' })
+    child.unref()
+    return ''
+  }
+  // macOS / Linux
+  return shell.openPath(targetPath)
+})
+
+ipcMain.handle('dialog:importSqlFiles', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Import SQL Files',
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: 'SQL / Text Files', extensions: ['sql', 'txt'] }],
+  })
+  if (result.canceled || !result.filePaths.length) return null
+  return result.filePaths.map(fp => ({
+    name: path.basename(fp, path.extname(fp)),
+    content: fs.readFileSync(fp, 'utf8'),
+  }))
+})
+
+interface ImportNode {
+  kind: 'file' | 'folder'
+  name: string
+  content?: string
+  children?: ImportNode[]
+}
+
+function readFolderRecursive(dir: string): ImportNode[] {
+  const entries = fs.readdirSync(dir, { withFileTypes: true })
+  const nodes: ImportNode[] = []
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      nodes.push({
+        kind: 'folder',
+        name: entry.name,
+        children: readFolderRecursive(path.join(dir, entry.name)),
+      })
+    } else if (entry.isFile() && /\.(sql|txt)$/i.test(entry.name)) {
+      nodes.push({
+        kind: 'file',
+        name: path.basename(entry.name, path.extname(entry.name)),
+        content: fs.readFileSync(path.join(dir, entry.name), 'utf8'),
+      })
+    }
+  }
+  return nodes
+}
+
+ipcMain.handle('fs:readFolder', async (_event, folderPath: string) => {
+  try {
+    return { ok: true, nodes: readFolderRecursive(folderPath) }
+  } catch (e) {
+    return { ok: false, error: String(e) }
+  }
+})
+
+interface ExportNode {
+  type: 'file' | 'folder'
+  name: string
+  content?: string
+  children?: ExportNode[]
+}
+
+ipcMain.handle('fs:exportProject', async (_event, basePath: string, nodes: ExportNode[]) => {
+  function writeNodes(dir: string, items: ExportNode[]) {
+    for (const item of items) {
+      if (item.type === 'folder') {
+        const folderPath = path.join(dir, item.name)
+        fs.mkdirSync(folderPath, { recursive: true })
+        writeNodes(folderPath, item.children ?? [])
+      } else {
+        fs.writeFileSync(path.join(dir, `${item.name}.sql`), item.content ?? '', 'utf8')
+      }
+    }
+  }
+  try {
+    writeNodes(basePath, nodes)
+    // Return the top-level path that was created so the renderer can open it directly.
+    const exportedPath = nodes.length > 0 && nodes[0].type === 'folder'
+      ? path.join(basePath, nodes[0].name)
+      : basePath
+    return { ok: true, exportedPath }
+  } catch (e) {
+    return { ok: false, error: String(e) }
+  }
 })
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────

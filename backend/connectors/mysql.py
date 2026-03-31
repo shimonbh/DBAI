@@ -4,9 +4,34 @@ MySQL connector using mysql-connector-python.
 import mysql.connector
 from mysql.connector import Error as MySQLError
 from typing import Any
-from datetime import datetime
+from datetime import datetime, timedelta
+from decimal import Decimal
 
 from backend.connectors.base import BaseConnector
+from backend.config import CONNECTION_TIMEOUT_SEC
+
+
+def _native(value: Any) -> Any:
+    """Convert MySQL-specific types to plain Python types for JSON serialisation."""
+    if isinstance(value, Decimal):
+        return int(value) if value == value.to_integral_value() else float(value)
+    if isinstance(value, (bytes, bytearray)):
+        # Single-byte: boolean comparison columns (e.g. non_unique = 0)
+        if len(value) == 1:
+            return bool(value[0])
+        try:
+            return value.decode("utf-8")
+        except UnicodeDecodeError:
+            return value.hex()
+    if isinstance(value, timedelta):
+        total = int(value.total_seconds())
+        return f"{total // 3600:02d}:{(total % 3600) // 60:02d}:{total % 60:02d}"
+    return value
+
+
+def _normalize(rows: list[dict]) -> list[dict]:
+    """Lowercase all column names and convert MySQL-specific value types."""
+    return [{k.lower(): _native(v) for k, v in row.items()} for row in rows]
 
 
 class MySQLConnector(BaseConnector):
@@ -23,7 +48,7 @@ class MySQLConnector(BaseConnector):
                 database=p["database"],
                 user=p["username"],
                 password=p["password"],
-                connection_timeout=10,
+                connection_timeout=CONNECTION_TIMEOUT_SEC,
                 autocommit=True,
             )
         except MySQLError as e:
@@ -37,11 +62,16 @@ class MySQLConnector(BaseConnector):
     # ── Query Execution ───────────────────────────────────────────────────────
 
     def execute_query(self, sql: str, params: tuple = ()) -> list[dict[str, Any]]:
+        # Reconnect silently if the server dropped an idle connection
+        try:
+            self._connection.ping(reconnect=True, attempts=2, delay=1)
+        except Exception:
+            pass
         cursor = self._connection.cursor(dictionary=True)
         try:
             cursor.execute(sql, params)
             if cursor.description:
-                return cursor.fetchall()
+                return _normalize(cursor.fetchall())
             return []
         finally:
             cursor.close()
@@ -77,6 +107,19 @@ class MySQLConnector(BaseConnector):
         """
         return self.execute_query(sql, (database,))
 
+    def get_procedure_params(self, database: str, procedure: str) -> list[dict]:
+        sql = """
+            SELECT
+                parameter_name AS name,
+                data_type
+            FROM information_schema.parameters
+            WHERE specific_schema = %s
+              AND specific_name = %s
+              AND parameter_mode IS NOT NULL
+            ORDER BY ordinal_position
+        """
+        return self.execute_query(sql, (database, procedure))
+
     def get_procedures(self, database: str) -> list[dict]:
         sql = """
             SELECT
@@ -100,11 +143,53 @@ class MySQLConnector(BaseConnector):
             WHERE table_schema = %s AND table_name = %s
             ORDER BY ordinal_position
         """
-        rows = self.execute_query(sql, (database, table))
-        # Normalize nullable to bool
-        for row in rows:
-            row["nullable"] = bool(row.get("nullable", 0))
-        return rows
+        return self.execute_query(sql, (database, table))
+
+    def get_triggers(self, database: str, table: str) -> list[dict]:
+        sql = """
+            SELECT
+                trigger_name          AS name,
+                action_timing         AS timing,
+                event_manipulation    AS event,
+                action_statement      AS body
+            FROM information_schema.triggers
+            WHERE trigger_schema = %s AND event_object_table = %s
+            ORDER BY trigger_name, event_manipulation
+        """
+        return self.execute_query(sql, (database, table))
+
+    def get_constraints(self, database: str, table: str) -> list[dict]:
+        sql = """
+            SELECT
+                tc.constraint_name      AS name,
+                cc.check_clause         AS definition
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.check_constraints cc
+                ON  cc.constraint_schema = tc.constraint_schema
+                AND cc.constraint_name   = tc.constraint_name
+            WHERE tc.table_schema    = %s
+              AND tc.table_name      = %s
+              AND tc.constraint_type = 'CHECK'
+            ORDER BY tc.constraint_name
+        """
+        return self.execute_query(sql, (database, table))
+
+    def get_foreign_keys(self, database: str, table: str) -> list[dict]:
+        sql = """
+            SELECT
+                kcu.constraint_name                                              AS name,
+                GROUP_CONCAT(kcu.column_name ORDER BY kcu.ordinal_position)     AS columns,
+                kcu.referenced_table_name                                        AS ref_table,
+                GROUP_CONCAT(kcu.referenced_column_name ORDER BY kcu.ordinal_position) AS ref_columns
+            FROM information_schema.key_column_usage kcu
+            JOIN information_schema.referential_constraints rc
+                ON  rc.constraint_schema = kcu.table_schema
+                AND rc.constraint_name   = kcu.constraint_name
+            WHERE kcu.table_schema = %s AND kcu.table_name = %s
+            GROUP BY kcu.constraint_name, kcu.referenced_table_name
+            ORDER BY kcu.constraint_name
+        """
+        return self.execute_query(sql, (database, table))
 
     def get_indexes(self, database: str, table: str) -> list[dict]:
         sql = """
@@ -118,6 +203,43 @@ class MySQLConnector(BaseConnector):
             GROUP BY index_name, non_unique
         """
         return self.execute_query(sql, (database, table))
+
+    def get_security(self, database: str) -> dict:
+        users = []
+        try:
+            rows = self.execute_query(
+                "SELECT user AS name, host, account_locked FROM mysql.user ORDER BY user, host"
+            )
+            for r in rows:
+                attrs = []
+                locked = r.get("account_locked")
+                if locked and str(locked).upper() in ("Y", "1", "TRUE"): attrs.append("LOCKED")
+                users.append({
+                    "name": f"{r['name']}@{r['host']}",
+                    "type": "login",
+                    "attributes": attrs,
+                })
+        except Exception:
+            pass  # mysql.user may not be readable without SUPER privilege
+
+        # Roles (MySQL 8+)
+        roles = []
+        try:
+            role_rows = self.execute_query(
+                "SELECT role_name AS name FROM information_schema.APPLICABLE_ROLES GROUP BY role_name ORDER BY role_name"
+            )
+            member_rows = self.execute_query(
+                "SELECT FROM_USER AS member, TO_USER AS role FROM information_schema.ROLE_EDGES ORDER BY role, member"
+            )
+            membership: dict[str, list[str]] = {}
+            for row in member_rows:
+                membership.setdefault(row["role"], []).append(row["member"])
+            for r in role_rows:
+                roles.append({"name": r["name"], "members": membership.get(r["name"], []), "attributes": []})
+        except Exception:
+            pass  # Roles not available in MySQL < 8
+
+        return {"users": users, "roles": roles}
 
     # ── Monitoring ────────────────────────────────────────────────────────────
 

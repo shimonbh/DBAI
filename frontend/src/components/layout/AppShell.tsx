@@ -1,28 +1,53 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { LeftPanel } from './LeftPanel'
 import { Resizer } from './Resizer'
 import { SettingsModal } from './SettingsModal'
+import { AiHeaderModal } from './AiHeaderModal'
+import { AboutModal } from './AboutModal'
 import { EditorPanel } from '@/components/editor/EditorPanel'
 import { MonitorPanel } from '@/components/monitor/MonitorPanel'
 import { ConnectionBadge } from '@/components/connection/ConnectionBadge'
 import { useMonitorStore } from '@/store/monitorStore'
 import { theme } from '@/theme'
 
-/**
- * Top-level shell layout:
- *   TopBar
- *   ┌─────────────┬───┬──────────────────────────┐
- *   │  Left Panel │ ║ │   Editor / Monitor        │
- *   └─────────────┴───┴──────────────────────────┘
- */
+function GearMenuItem({ label, onClick }: { label: string; onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <div
+      style={{ padding: '8px 16px', fontSize: 13, cursor: 'pointer', userSelect: 'none' as const,
+        color: 'var(--text-primary)',
+        background: hov ? 'var(--bg-primary)' : 'transparent',
+        transition: 'background 0.1s' }}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      onClick={onClick}
+    >{label}</div>
+  )
+}
+
 export function AppShell() {
-  const [leftWidth, setLeftWidth]       = useState(theme.leftPanelWidth)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [leftWidth, setLeftWidth] = useState(theme.leftPanelWidth)
+  const [menuOpen,      setMenuOpen]      = useState(false)
+  const [settingsOpen,  setSettingsOpen]  = useState(false)
+  const [aiHeaderOpen,  setAiHeaderOpen]  = useState(false)
+  const [aboutOpen,     setAboutOpen]     = useState(false)
   const { isOpen: monitorOpen, toggleMonitor } = useMonitorStore()
+  const gearBtnRef = useRef<HTMLButtonElement>(null)
 
   const handleResize = useCallback((delta: number) => {
-    setLeftWidth(w => Math.max(180, Math.min(500, w + delta)))
+    setLeftWidth(w => Math.max(160, Math.min(520, w + delta)))
   }, [])
+
+  // Close gear menu when clicking outside
+  useEffect(() => {
+    if (!menuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (!(e.target as Element)?.closest?.('[data-gear-menu]')) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [menuOpen])
+
+  const gearRect = gearBtnRef.current?.getBoundingClientRect()
 
   return (
     <div style={styles.root}>
@@ -32,35 +57,47 @@ export function AppShell() {
         <ConnectionBadge />
         <div style={styles.topBarRight}>
           <button
-            style={{
-              ...styles.iconBtn,
-              color: monitorOpen ? 'var(--accent-color)' : 'var(--text-muted)',
-            }}
-            onClick={toggleMonitor}
-            title="Toggle DB Monitor"
-          >
-            📊 Monitor
-          </button>
+            style={{ ...styles.iconBtn, color: monitorOpen ? 'var(--accent-color)' : 'var(--text-muted)' }}
+            onClick={toggleMonitor} title="Toggle DB Monitor"
+          >📊 Monitor</button>
           <button
-            style={styles.iconBtn}
-            onClick={() => setSettingsOpen(v => !v)}
-            title="Settings"
-          >
-            ⚙️
-          </button>
+            ref={gearBtnRef}
+            data-gear-menu
+            style={{ ...styles.iconBtn, color: menuOpen ? 'var(--accent-color)' : 'var(--text-muted)' }}
+            onClick={() => setMenuOpen(v => !v)}
+            title="Menu"
+          >⚙️</button>
         </div>
       </div>
 
+      {/* Gear dropdown */}
+      {menuOpen && gearRect && (
+        <div data-gear-menu style={{
+          position: 'fixed',
+          top: gearRect.bottom + 4,
+          right: window.innerWidth - gearRect.right,
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border-color)',
+          borderRadius: 10,
+          boxShadow: '0 8px 28px rgba(0,0,0,0.45)',
+          zIndex: 3000,
+          minWidth: 200,
+          overflow: 'hidden',
+          padding: '4px 0',
+        }}>
+          <GearMenuItem label="⚙️  Settings" onClick={() => { setSettingsOpen(true); setMenuOpen(false) }} />
+          <GearMenuItem label="🤖  AI Query Header" onClick={() => { setAiHeaderOpen(true); setMenuOpen(false) }} />
+          <div style={{ height: 1, background: 'var(--border-color)', margin: '3px 0' }} />
+          <GearMenuItem label="ℹ️  About" onClick={() => { setAboutOpen(true); setMenuOpen(false) }} />
+        </div>
+      )}
+
       {/* Main content */}
       <div style={styles.main}>
-        {/* Left panel */}
-        <div style={{ width: leftWidth, minWidth: 180, overflow: 'hidden', flexShrink: 0 }}>
+        <div style={{ width: leftWidth, minWidth: 160, overflow: 'hidden', flexShrink: 0 }}>
           <LeftPanel />
         </div>
-
         <Resizer onResize={handleResize} />
-
-        {/* Right: editor + optional monitor */}
         <div style={styles.rightArea}>
           {monitorOpen ? (
             <>
@@ -77,8 +114,9 @@ export function AppShell() {
         </div>
       </div>
 
-      {/* Settings modal */}
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen  && <SettingsModal  onClose={() => setSettingsOpen(false)}  />}
+      {aiHeaderOpen  && <AiHeaderModal  onClose={() => setAiHeaderOpen(false)}  />}
+      {aboutOpen     && <AboutModal     onClose={() => setAboutOpen(false)}     />}
     </div>
   )
 }

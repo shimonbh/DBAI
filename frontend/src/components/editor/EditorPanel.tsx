@@ -1,6 +1,7 @@
 import { useRef, useCallback, useState } from 'react'
 import { useEditorStore } from '@/store/editorStore'
 import { useConnectionStore } from '@/store/connectionStore'
+import { useUIStore } from '@/store/uiStore'
 import { queryService } from '@/services/queryService'
 import { MonacoEditor } from './MonacoEditor'
 import { ResultsPane } from './ResultsPane'
@@ -42,8 +43,11 @@ export function EditorPanel() {
     moveTab, closeTabsToRight, closeOtherTabs,
     updateTabSql, isExecuting,
   } = useEditorStore()
-  const { activeConnectionId } = useConnectionStore()
+  const { activeConnectionId, connectedIds } = useConnectionStore()
+  const openSavePanel = useUIStore(s => s.openSavePanel)
   const dropRef = useRef<HTMLDivElement>(null)
+
+  const [saveHover, setSaveHover] = useState(false)
 
   // Height of the editor card in pixels; results card takes the remainder
   const [editorHeight, setEditorHeight] = useState(300)
@@ -63,17 +67,22 @@ export function EditorPanel() {
 
   const handleTabDragStart = (e: React.DragEvent, idx: number) => {
     setDragSrcIdx(idx)
-    e.dataTransfer.effectAllowed = 'move'
-    // Custom MIME type ensures the container's .sql file-drop handler ignores this drag
+    e.dataTransfer.effectAllowed = 'copyMove'
+    // Used by the tab bar to reorder tabs
     e.dataTransfer.setData('application/tab-reorder', String(idx))
+    // Used by ProjectsSection to create a saved query from this tab's SQL
+    const tab = tabs[idx]
+    e.dataTransfer.setData('application/dbai-tab-sql', JSON.stringify({ sql: tab.sql, title: tab.title }))
   }
   const handleTabDragOver = (e: React.DragEvent, idx: number) => {
     if (dragSrcIdx === null || dragSrcIdx === idx) return
+    if (!e.dataTransfer.types.includes('application/tab-reorder')) return
     e.preventDefault()
     e.stopPropagation()
     setDragOverIdx(idx)
   }
   const handleTabDrop = (e: React.DragEvent, toIdx: number) => {
+    if (!e.dataTransfer.types.includes('application/tab-reorder')) return
     e.preventDefault()
     e.stopPropagation()
     if (dragSrcIdx !== null && dragSrcIdx !== toIdx) moveTab(dragSrcIdx, toIdx)
@@ -148,41 +157,58 @@ export function EditorPanel() {
       {/* ── Editor card ───────────────────────────────────────────────────── */}
       <div style={{ ...S.card, height: editorHeight }}>
 
-        {/* Tab bar */}
+        {/* Tab bar — scrollable tabs + fixed-right controls */}
         <div style={S.tabBar}>
 
-          {/* Tabs — draggable + right-click menu */}
-          {tabs.map((tab, i) => (
-            <div
-              key={tab.id}
-              draggable
-              onDragStart={e => handleTabDragStart(e, i)}
-              onDragOver={e => handleTabDragOver(e, i)}
-              onDrop={e => handleTabDrop(e, i)}
-              onDragEnd={handleTabDragEnd}
-              onContextMenu={e => handleTabContextMenu(e, tab.id)}
+          {/* Scrollable tab strip */}
+          <div style={S.tabScroll}>
+            {tabs.map((tab, i) => (
+              <div
+                key={tab.id}
+                draggable
+                onDragStart={e => handleTabDragStart(e, i)}
+                onDragOver={e => handleTabDragOver(e, i)}
+                onDrop={e => handleTabDrop(e, i)}
+                onDragEnd={handleTabDragEnd}
+                onContextMenu={e => handleTabContextMenu(e, tab.id)}
+                style={{
+                  ...S.tab,
+                  ...(tab.id === activeTabId ? S.tabActive : {}),
+                  opacity: dragSrcIdx === i ? 0.4 : 1,
+                  boxShadow: dragOverIdx === i && dragSrcIdx !== i
+                    ? 'inset 2px 0 0 var(--accent-color)'
+                    : undefined,
+                }}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                <span style={S.tabTitle}>{tab.title}{tab.isDirty ? ' •' : ''}</span>
+                {tabs.length > 1 && (
+                  <button style={S.tabClose} onClick={e => { e.stopPropagation(); closeTab(tab.id) }}>×</button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Floating 💾 Save button — visible when active tab has unsaved changes */}
+          {activeTab?.isDirty && (
+            <button
               style={{
-                ...S.tab,
-                ...(tab.id === activeTabId ? S.tabActive : {}),
-                opacity: dragSrcIdx === i ? 0.4 : 1,
-                // Accent inset shadow on left edge = drop-position indicator
-                boxShadow: dragOverIdx === i && dragSrcIdx !== i
-                  ? 'inset 2px 0 0 var(--accent-color)'
-                  : undefined,
+                ...S.saveTabBtn,
+                opacity: saveHover ? 1 : 0.55,
               }}
-              onClick={() => setActiveTab(tab.id)}
+              onMouseEnter={() => setSaveHover(true)}
+              onMouseLeave={() => setSaveHover(false)}
+              onClick={openSavePanel}
+              title="Save query (unsaved changes)"
             >
-              <span style={S.tabTitle}>{tab.title}{tab.isDirty ? ' •' : ''}</span>
-              {tabs.length > 1 && (
-                <button style={S.tabClose} onClick={e => { e.stopPropagation(); closeTab(tab.id) }}>×</button>
-              )}
-            </div>
-          ))}
+              💾
+            </button>
+          )}
 
-          <button style={S.newTabBtn} onClick={() => openTab()} title="New tab">+</button>
-
-          {/* Right-side action buttons */}
+          {/* Fixed-right controls — always visible regardless of tab count */}
           <div style={S.tabBarRight}>
+            <button style={S.newTabBtn} onClick={() => openTab()} title="New tab">+</button>
+            <div style={S.tabBarDivider} />
             {isExecuting ? (
               <button
                 style={S.stopBtn}
@@ -194,8 +220,11 @@ export function EditorPanel() {
             ) : (
               <button
                 style={S.runBtn}
-                onClick={() => activeConnectionId && useEditorStore.getState().executeQuery(activeConnectionId)}
-                disabled={!activeConnectionId}
+                onClick={() => {
+                  const connId = activeTab?.connectionId ?? activeConnectionId ?? [...connectedIds][0]
+                  if (connId) useEditorStore.getState().executeQuery(connId)
+                }}
+                disabled={connectedIds.size === 0}
                 title="Run query (Ctrl+Enter)"
               >
                 ▶ Run
@@ -292,14 +321,18 @@ const S = {
 
   card: CARD_BASE,
 
-  // Tab bar at top of the editor card
-  tabBar:     { display: 'flex', alignItems: 'center', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--border-color)', overflowX: 'auto' as const, minHeight: 34, flexShrink: 0, borderRadius: '12px 12px 0 0' },
+  // Tab bar — outer row never scrolls; only the inner tabScroll overflows
+  tabBar:      { display: 'flex', alignItems: 'stretch', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--border-color)', minHeight: 34, flexShrink: 0, borderRadius: '12px 12px 0 0', overflow: 'hidden' },
+  tabScroll:   { display: 'flex', alignItems: 'center', flex: 1, overflowX: 'auto' as const, minWidth: 0 },
   tab:        { display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', cursor: 'pointer', borderRight: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: 12, whiteSpace: 'nowrap' as const, flexShrink: 0, borderTop: '2px solid transparent', userSelect: 'none' as const },
   tabActive:  { background: 'var(--bg-panel)', color: 'var(--text-primary)', borderTop: '2px solid var(--accent-color)' },
   tabTitle:   { maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' },
   tabClose:   { background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 2px' },
-  newTabBtn:  { background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18, padding: '0 10px', flexShrink: 0 },
-  tabBarRight: { display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', paddingRight: 8, flexShrink: 0 },
+  // Fixed right section — always visible
+  tabBarRight:  { display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, padding: '0 8px', borderLeft: '1px solid var(--border-color)' },
+  tabBarDivider:{ width: 1, height: 16, background: 'var(--border-color)', flexShrink: 0 },
+  newTabBtn:    { background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18, padding: '0 4px', flexShrink: 0 },
+  saveTabBtn:   { background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '0 6px', flexShrink: 0, transition: 'opacity 0.15s' },
   runBtn:      { background: 'var(--accent-color)', border: 'none', borderRadius: 4, color: '#fff', fontSize: 11, padding: '3px 12px', cursor: 'pointer', fontWeight: 600 as const, whiteSpace: 'nowrap' as const },
   stopBtn:     { background: '#e05555', border: 'none', borderRadius: 4, color: '#fff', fontSize: 11, padding: '3px 12px', cursor: 'pointer', fontWeight: 600 as const, whiteSpace: 'nowrap' as const },
   monacoWrap: { flex: 1, minHeight: 0, overflow: 'hidden' },

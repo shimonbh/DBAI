@@ -22,6 +22,25 @@ def init_db() -> None:
     """Create all tables if they don't exist. Called once at app startup."""
     from backend.storage.models import Base  # Import here to avoid circular dependency
     Base.metadata.create_all(bind=_engine)
+    # Migrate existing databases: add columns introduced after initial release
+    _run_migrations()
+
+
+def _run_migrations() -> None:
+    """Apply incremental schema changes to existing SQLite databases."""
+    migrations = [
+        "ALTER TABLE connection_profiles ADD COLUMN windows_auth BOOLEAN DEFAULT 0",
+    ]
+    with _engine.connect() as conn:
+        for sql in migrations:
+            try:
+                conn.execute(_text(sql))
+                conn.commit()
+            except Exception:
+                pass  # Column already exists — safe to ignore
+
+
+from sqlalchemy import text as _text
 
 
 @contextmanager

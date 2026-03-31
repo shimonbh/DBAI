@@ -1,33 +1,41 @@
+import { useState } from 'react'
 import type { ViewSchema } from '@/types/schema'
 import { useEditorStore } from '@/store/editorStore'
 import { useConnectionStore } from '@/store/connectionStore'
+// connectionId comes from props now (passed by DBExplorer)
 import { theme } from '@/theme'
+import { SqlContextMenu } from './SqlContextMenu'
+import { buildSelect, buildInsert, buildUpdate, buildDelete } from './sqlBuilder'
 
 interface Props {
   view: ViewSchema
+  connectionId: string
   nodeId: string
   expanded: boolean
   onToggle: (nodeId: string) => void
 }
 
-function quoteIdentifier(name: string, dbType: string): string {
-  if (!/[^a-zA-Z0-9_]/.test(name)) return name
-  if (dbType === 'mysql') return `\`${name}\``
-  if (dbType === 'mssql') return `[${name}]`
-  return `"${name}"`  // postgresql, sqlite
-}
-
 /** Expandable tree node for a database view. Shows columns when expanded. */
-export function ViewNode({ view, nodeId, expanded, onToggle }: Props) {
+export function ViewNode({ view, connectionId, nodeId, expanded, onToggle }: Props) {
   const openTab = useEditorStore(s => s.openTab)
-  const { profiles, activeConnectionId } = useConnectionStore()
-  const dbType = profiles.find(p => p.id === activeConnectionId)?.db_type ?? 'sqlite'
+  const { profiles } = useConnectionStore()
+  const dbType = profiles.find(p => p.id === connectionId)?.db_type ?? 'sqlite'
 
-  const insertView = (e: React.MouseEvent) => {
+  const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null)
+
+  const handleArrow = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation()
-    const quoted = quoteIdentifier(view.name, dbType)
-    openTab(`SELECT * FROM ${quoted} LIMIT 100`, view.name)
+    setMenuAnchor(prev => prev ? null : e.currentTarget.getBoundingClientRect())
   }
+
+  const open = (sql: string) => openTab(sql, view.name, true, connectionId)
+
+  const menuItems = [
+    { label: 'Select', action: () => open(buildSelect(view.name, view.columns, dbType)) },
+    { label: 'Insert', action: () => open(buildInsert(view.name, view.columns, dbType)) },
+    { label: 'Update', action: () => open(buildUpdate(view.name, view.columns, dbType)) },
+    { label: 'Delete', action: () => open(buildDelete(view.name, view.columns, dbType)) },
+  ]
 
   return (
     <div>
@@ -38,10 +46,18 @@ export function ViewNode({ view, nodeId, expanded, onToggle }: Props) {
         <span style={styles.name}>{view.name}</span>
         <button
           style={styles.queryBtn}
-          onClick={insertView}
-          title={`SELECT from ${view.name}`}
+          onClick={handleArrow}
+          title={`SQL actions for ${view.name}`}
         >▶</button>
       </div>
+
+      {menuAnchor && (
+        <SqlContextMenu
+          items={menuItems}
+          anchor={menuAnchor}
+          onClose={() => setMenuAnchor(null)}
+        />
+      )}
 
       {expanded && view.columns.map(col => (
         <div key={col.name} style={styles.colRow}>

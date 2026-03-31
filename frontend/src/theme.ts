@@ -62,13 +62,13 @@ export const DARK_COLORS = {
 }
 
 export const LIGHT_COLORS = {
-  bgPrimary:   '#f6f8fa',
-  bgSecondary: '#ffffff',
-  bgPanel:     '#eaeef2',
-  textPrimary: '#1f2328',
-  textMuted:   '#656d76',
-  borderColor: '#d0d7de',
-  accentColor: '#0969da',
+  bgPrimary:   '#f3f4f6',   // app outer background
+  bgSecondary: '#ffffff',   // content/editor areas
+  bgPanel:     '#ffffff',   // panels and cards
+  textPrimary: '#111827',   // near-black body text
+  textMuted:   '#6b7280',   // muted gray
+  borderColor: '#e5e7eb',   // subtle border
+  accentColor: '#2563eb',   // vivid blue
   editorTheme: 'vs' as const,
 }
 

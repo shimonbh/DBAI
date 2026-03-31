@@ -28,7 +28,10 @@ export function MonacoEditor({ tabId, sql, onChange }: Props) {
   const decorRef  = useRef<string[]>([])
 
   const { activeConnectionId, profiles } = useConnectionStore()
-  const { selectedDatabase, databases } = useSchemaStore()
+  const { schemas } = useSchemaStore()
+  const activeEntry    = schemas[activeConnectionId ?? '']
+  const databases      = activeEntry?.databases ?? []
+  const selectedDatabase = databases[0]?.name ?? null
   const { inlineSuggestion, setInlineSuggestion, generateFullQuery } = useEditorStore()
   const { requestSuggestion } = useAIAutocomplete(activeConnectionId)
   const isDark = useUIStore(s => s.isDark)

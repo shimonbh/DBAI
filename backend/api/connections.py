@@ -22,6 +22,7 @@ class ConnectionIn(BaseModel):
     database: str         # file path for SQLite, DB name for others
     username: str = ""
     password: str = ""
+    windows_auth: bool = False   # MSSQL only: use Windows Authentication
 
 
 class ConnectionOut(BaseModel):
@@ -32,6 +33,8 @@ class ConnectionOut(BaseModel):
     port: int | None = None
     database: str
     username: str = ""
+    password: str = ""
+    windows_auth: bool = False
     is_connected: bool = False
 
     class Config:
@@ -72,7 +75,13 @@ def get_connection(id: str, db: Session = Depends(get_db)):
 def update_connection(id: str, data: ConnectionIn, db: Session = Depends(get_db)):
     _validate_db_type(data.db_type)
     repo = ConnectionRepo(db)
-    profile = repo.update(id, data.model_dump())
+    update_data = data.model_dump()
+    # If the password field was left empty, keep the existing stored password
+    if not update_data.get("password"):
+        existing = repo.get_by_id(id)
+        if existing:
+            update_data["password"] = existing.password
+    profile = repo.update(id, update_data)
     if not profile:
         raise HTTPException(404, "Connection not found")
     return ConnectionOut.model_validate(profile)
@@ -137,12 +146,13 @@ def _validate_db_type(db_type: str) -> None:
 
 def _profile_to_dict(profile) -> dict:
     return {
-        "db_type":  profile.db_type,
-        "host":     profile.host,
-        "port":     profile.port,
-        "database": profile.database,
-        "username": profile.username,
-        "password": profile.password,
+        "db_type":      profile.db_type,
+        "host":         profile.host,
+        "port":         profile.port,
+        "database":     profile.database,
+        "username":     profile.username,
+        "password":     profile.password,
+        "windows_auth": bool(profile.windows_auth),
     }
 
 

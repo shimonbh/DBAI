@@ -95,8 +95,12 @@ class AIProviderRegistry:
             from backend.agent.providers.openrouter import OpenRouterProvider
             return OpenRouterProvider(api_key=api_key, default_model=model, base_url=url)
 
+        if provider_name == "lmstudio":
+            from backend.agent.providers.lmstudio import LMStudioProvider
+            return LMStudioProvider(api_key=api_key, default_model=model, base_url=url)
+
         raise ValueError(f"Unknown AI provider: '{provider_name}'")
 
     @staticmethod
     def list_providers() -> list[str]:
-        return ["anthropic", "openai", "gemini", "openrouter"]
+        return ["anthropic", "openai", "gemini", "openrouter", "lmstudio"]

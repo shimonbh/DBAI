@@ -43,21 +43,40 @@ class SchemaIntrospector:
         except Exception:
             pass
 
+        procedures = []
+        for p in procedures_raw:
+            params = []
+            try:
+                params = self.connector.get_procedure_params(database, p["name"])
+            except Exception:
+                pass
+            procedures.append({
+                "name":       p["name"],
+                "definition": p.get("definition"),
+                "parameters": params,
+            })
+
         return {
             "name":       database,
             "tables":     [self._build_table(database, t["name"]) for t in tables],
             "views":      [self._build_view(database, v["name"]) for v in views_raw],
-            "procedures": [
-                {"name": p["name"], "definition": p.get("definition")}
-                for p in procedures_raw
-            ],
+            "procedures": procedures,
         }
 
     def _build_table(self, database: str, table: str) -> dict:
+        def _safe(fn, *args):
+            try:
+                return fn(*args)
+            except Exception:
+                return []
+
         return {
-            "name":    table,
-            "columns": self.connector.get_columns(database, table),
-            "indexes": self.connector.get_indexes(database, table),
+            "name":         table,
+            "columns":      _safe(self.connector.get_columns,      database, table),
+            "indexes":      _safe(self.connector.get_indexes,      database, table),
+            "triggers":     _safe(self.connector.get_triggers,     database, table),
+            "constraints":  _safe(self.connector.get_constraints,  database, table),
+            "foreign_keys": _safe(self.connector.get_foreign_keys, database, table),
         }
 
     def _build_view(self, database: str, view: str) -> dict:
@@ -76,11 +95,22 @@ class SchemaIntrospector:
         Produce a compact, token-efficient string representation of the schema
         for injection into AI agent prompts.
 
+        For PostgreSQL, identifiers that contain uppercase letters are wrapped in
+        double-quotes so the AI generates syntactically correct SQL.
+
         Example output:
             Database: mydb
               Table: orders (id INT(PK), customer_id INT, status VARCHAR)
-              Table: customers (id INT(PK), name VARCHAR, email VARCHAR)
+              Table: users ("xmppJid" VARCHAR, "displayName" VARCHAR)
         """
+        is_pg = self.connector.profile.get("db_type") == "postgresql"
+
+        def q(name: str) -> str:
+            """Quote a PostgreSQL identifier that has uppercase characters."""
+            if is_pg and any(c.isupper() for c in name):
+                return f'"{name}"'
+            return name
+
         lines: list[str] = []
         for db in schema.get("databases", []):
             if database and db["name"] != database:
@@ -90,11 +120,11 @@ class SchemaIntrospector:
                 col_parts = []
                 for col in table.get("columns", []):
                     pk = "(PK)" if col.get("is_pk") else ""
-                    col_parts.append(f"{col['name']} {col.get('data_type','')}{pk}")
-                lines.append(f"  Table: {table['name']} ({', '.join(col_parts)})")
+                    col_parts.append(f"{q(col['name'])} {col.get('data_type','')}{pk}")
+                lines.append(f"  Table: {q(table['name'])} ({', '.join(col_parts)})")
             for view in db.get("views", []):
-                col_parts = [c["name"] for c in view.get("columns", [])]
-                lines.append(f"  View: {view['name']} ({', '.join(col_parts)})")
+                col_parts = [q(c["name"]) for c in view.get("columns", [])]
+                lines.append(f"  View: {q(view['name'])} ({', '.join(col_parts)})")
             for proc in db.get("procedures", []):
-                lines.append(f"  Procedure: {proc['name']}")
+                lines.append(f"  Procedure: {q(proc['name'])}")
         return "\n".join(lines)

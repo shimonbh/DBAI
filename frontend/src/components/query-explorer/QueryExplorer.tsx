@@ -6,6 +6,7 @@ import { useUIStore } from '@/store/uiStore'
 import { extractTables } from '@/utils/sqlTables'
 import { theme } from '@/theme'
 import type { QueryHistoryEntry, SavedQuery } from '@/types/query'
+import { ProjectsSection } from './ProjectsSection'
 
 type TagMap = Record<string, string> // historyId → tag name
 
@@ -163,9 +164,12 @@ function SavedItem({ q, isActive, onOpen, onUpdate, onDelete }: {
 }) {
   const [hovered, setHovered] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const [editName, setEditName] = useState(q.name)
   const [editDesc, setEditDesc] = useState(q.description ?? '')
   const [saving, setSaving] = useState(false)
+
+  const hasDesc = !!q.description
 
   const startEdit = (e: React.MouseEvent) => { e.stopPropagation(); setEditName(q.name); setEditDesc(q.description ?? ''); setEditing(true) }
   const cancelEdit = (e: React.MouseEvent) => { e.stopPropagation(); setEditing(false) }
@@ -177,8 +181,8 @@ function SavedItem({ q, isActive, onOpen, onUpdate, onDelete }: {
       await onUpdate(q.id, {
         name: editName.trim(),
         description: editDesc.trim() || undefined,
-        sql_text: q.sql_text,   // required by backend SaveQueryIn
-        tags: q.tags,            // required by backend SaveQueryIn
+        sql_text: q.sql_text,
+        tags: q.tags,
       })
       setEditing(false)
     }
@@ -205,47 +209,95 @@ function SavedItem({ q, isActive, onOpen, onUpdate, onDelete }: {
   return (
     <div
       data-qid={q.id}
+      draggable
+      onDragStart={e => {
+        e.dataTransfer.effectAllowed = 'copy'
+        e.dataTransfer.setData('application/dbai-query-id', q.id)
+      }}
       style={{
         ...svS.card,
         background:   isActive ? `${ACTIVE_TAB_CLR}18` : hovered ? theme.bgPanel : theme.bgSecondary,
         borderColor:  isActive ? ACTIVE_TAB_CLR : hovered ? theme.accentColor : theme.borderColor,
         boxShadow:    hovered || isActive ? '0 2px 8px rgba(0,0,0,0.25)' : 'none',
+        cursor: 'grab',
       }}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      onClick={() => onOpen(q.sql_text, q.name)}>
+      onClick={() => hasDesc ? setExpanded(v => !v) : onOpen(q.sql_text, q.name)}
+      onDoubleClick={() => onOpen(q.sql_text, q.name)}
+    >
       <div style={iS.row}>
+        <span style={svS.expandArrow}>{hasDesc ? (expanded ? '▾' : '▸') : ' '}</span>
         <span style={svS.name}>{q.name}</span>
         {hovered && (
           <>
+            <button style={svS.openBtn} title="Open in editor" onClick={e => { e.stopPropagation(); onOpen(q.sql_text, q.name) }}>→</button>
             <button style={iS.tagBtn} title="Edit" onClick={startEdit}>✎</button>
             <button style={iS.delBtn} title="Delete" onClick={e => { e.stopPropagation(); onDelete(q.id) }}>✕</button>
           </>
         )}
       </div>
-      {q.description && <div style={svS.desc}>{q.description}</div>}
+      {expanded && q.description && <div style={svS.desc}>{q.description}</div>}
     </div>
   )
 }
 const svS = {
   card:      { margin: '2px 6px', padding: '7px 10px', borderRadius: 8, border: `1px solid ${theme.borderColor}`, cursor: 'pointer', transition: 'background 0.15s, border-color 0.15s, box-shadow 0.15s', background: theme.bgSecondary },
   name:      { flex: 1, fontSize: 12, fontWeight: 600 as const, color: theme.textPrimary, overflow: 'hidden', whiteSpace: 'nowrap' as const, textOverflow: 'ellipsis' },
-  desc:      { fontSize: 11, color: theme.textMuted, marginTop: 3, lineHeight: 1.4 },
+  expandArrow: { fontSize: 10, color: theme.textMuted, width: 10, flexShrink: 0, userSelect: 'none' as const },
+  openBtn:     { background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: theme.accentColor, padding: '0 2px', flexShrink: 0, fontWeight: 600 as const },
+  desc:      { fontSize: 11, color: theme.textMuted, marginTop: 5, lineHeight: 1.4, paddingLeft: 14 },
   editInput: { width: '100%', background: theme.bgPanel, border: `1px solid ${theme.borderColor}`, borderRadius: 4, padding: '4px 7px', color: theme.textPrimary, fontSize: 12, outline: 'none', boxSizing: 'border-box' as const },
   editBtns:  { display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 6 },
   cancelBtn: { background: 'none', border: `1px solid ${theme.borderColor}`, borderRadius: 4, padding: '3px 9px', color: theme.textMuted, cursor: 'pointer', fontSize: 11 },
   saveBtn:   { background: theme.accentColor, border: 'none', borderRadius: 4, padding: '3px 9px', color: '#fff', cursor: 'pointer', fontSize: 11 },
 }
 
+// ── SectionBlock ──────────────────────────────────────────────────────────────
+// Top-level collapsible section header used inside the Workspace panel
+function SectionBlock({ label, badge, defaultOpen = true, children }: {
+  label: string; badge?: number; defaultOpen?: boolean; children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div>
+      <div style={sbS.header} onClick={() => setOpen(v => !v)}>
+        <span style={sbS.arrow}>{open ? '▾' : '▸'}</span>
+        <span style={sbS.label}>{label}</span>
+        {badge !== undefined && <span style={sbS.badge}>{badge}</span>}
+      </div>
+      {open && <div style={{ paddingLeft: 10 }}>{children}</div>}
+    </div>
+  )
+}
+const sbS = {
+  header: { display: 'flex' as const, alignItems: 'center', gap: 5, padding: '7px 12px',
+    cursor: 'pointer', userSelect: 'none' as const, background: theme.bgPanel,
+    borderBottom: `1px solid ${theme.borderColor}`,
+    position: 'sticky' as const, top: 0, zIndex: 3 },
+  arrow:  { fontSize: 10, color: theme.accentColor, width: 10, flexShrink: 0 },
+  label:  { flex: 1, fontSize: 11, fontWeight: 700 as const, color: theme.textPrimary,
+    textTransform: 'uppercase' as const, letterSpacing: 0.8 },
+  badge:  { fontSize: 10, color: theme.textMuted, background: theme.bgSecondary,
+    borderRadius: 8, padding: '1px 6px', flexShrink: 0 },
+}
+
+// Tracks the last query ID that triggered a force-open — persists across panel remounts
+// so we don't re-open tree groups the user has manually collapsed.
+let _lastForceOpenedId: string | null = null
+
 // ── QueryExplorer (main) ──────────────────────────────────────────────────────
 export function QueryExplorer() {
   const [searchText, setSearchText] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [tags, setTagsState] = useState<TagMap>({})
-  // ID of the specific saved query that is currently highlighted in the tree
   const [activeQueryId, setActiveQueryId] = useState<string | null>(null)
 
-  const { activeConnectionId, profiles } = useConnectionStore(s => ({ activeConnectionId: s.activeConnectionId, profiles: s.profiles }))
-  const { history, saved, loadHistory, loadSaved, updateSaved, deleteHistory, deleteSaved } = useQueryStore()
+  const { connectedIds, activeConnectionId, profiles } = useConnectionStore(s => ({
+    connectedIds: s.connectedIds,
+    activeConnectionId: s.activeConnectionId,
+    profiles: s.profiles,
+  }))
+  const { historyByConn, saved, loadHistory, loadSaved, updateSaved, deleteHistory, deleteSaved } = useQueryStore()
   const { openTab, tabs, activeTabId } = useEditorStore(s => ({ openTab: s.openTab, tabs: s.tabs, activeTabId: s.activeTabId }))
   const { setLeftPanel, openSavePanel, pendingScrollToId, clearPendingScroll } = useUIStore(s => ({
     setLeftPanel:       s.setLeftPanel,
@@ -259,23 +311,46 @@ export function QueryExplorer() {
     return sql ? normSql(sql) : ''
   }, [tabs, activeTabId])
 
+  // Stable key for connectedIds set to avoid effect thrashing
+  const connectedIdsKey = [...connectedIds].sort().join(',')
+
   useEffect(() => {
-    if (!activeConnectionId) return
-    setTagsState(loadTags(activeConnectionId))
-    loadHistory(activeConnectionId)
-    loadSaved(activeConnectionId)
+    const ids = [...connectedIds]
+    if (!ids.length) return
+
+    // Load history for every connected connection
+    ids.forEach(cid => loadHistory(cid))
+    // Load all saved queries (no filter — groups by connection_id in render)
+    loadSaved()
+
+    // Merge tags from all connected connections
+    const merged: TagMap = {}
+    ids.forEach(cid => Object.assign(merged, loadTags(cid)))
+    setTagsState(merged)
+
     setSelectedIds(new Set())
-  }, [activeConnectionId])
+  }, [connectedIdsKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Flat history across all connected connections
+  const allHistory = useMemo(() => {
+    return [...connectedIds].flatMap(cid => historyByConn[cid] ?? [])
+  }, [connectedIds, historyByConn])
 
   const setTag = useCallback((id: string, tag: string) => {
-    if (!activeConnectionId) return
+    // Find which connection owns this history entry
+    const connId = [...connectedIds].find(cid =>
+      (historyByConn[cid] ?? []).some(e => e.id === id)
+    ) ?? activeConnectionId
+    if (!connId) return
     setTagsState(prev => {
       const next = { ...prev }
       if (tag) next[id] = tag; else delete next[id]
-      persistTags(activeConnectionId, next)
+      const connTags = { ...loadTags(connId) }
+      if (tag) connTags[id] = tag; else delete connTags[id]
+      persistTags(connId, connTags)
       return next
     })
-  }, [activeConnectionId])
+  }, [connectedIds, historyByConn, activeConnectionId])
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
@@ -285,61 +360,38 @@ export function QueryExplorer() {
     })
   }, [])
 
-  // ── Saved tree: db → table → queries ───────────────────────────────────────
-  const savedDbTree = useMemo(() => {
-    // Extract a clean display name from a db path or name:
-    // strips leading path segments (both / and \) then strips file extension
-    const cleanDbName = (raw: string) =>
-      raw.trim().replace(/^.*[/\\]/, '').replace(/\.[^.]+$/, '').trim()
-
-    // Level 1: group by database name
-    // Priority: profile.database (cleaned) → profile.name (cleaned) → '\x00noDb'
-    const dbMap = new Map<string, SavedQuery[]>()
-    for (const q of saved) {
-      const profile  = profiles.find(p => p.id === q.connection_id)
-      const dbKey    = (profile?.database && cleanDbName(profile.database))
-                    || (profile?.name     && cleanDbName(profile.name))
-                    || '\x00noDb'
-      const list     = dbMap.get(dbKey) ?? []
-      list.push(q)
-      dbMap.set(dbKey, list)
-    }
-    return dbMap
-  }, [saved, profiles])
-
-  const savedDbKeys = useMemo(() => {
-    const ks = [...savedDbTree.keys()].filter(k => k !== '\x00noDb').sort()
-    if (savedDbTree.has('\x00noDb')) ks.push('\x00noDb')
-    return ks
-  }, [savedDbTree])
-
-  // Build table-level map — each query goes under its PRIMARY (first) table only,
-  // so multi-table queries appear exactly once and only one card is ever highlighted.
+  // Build table-level map for saved queries within a connection.
+  // Each query appears under every table it references.
   const buildTableTree = (queries: SavedQuery[]) => {
     const map = new Map<string, SavedQuery[]>()
     for (const q of queries) {
-      const keys   = extractTables(q.sql_text)
-      const bucket = keys.length > 0 ? keys[0] : '\x00other'
-      const b = map.get(bucket) ?? []
-      b.push(q)
-      map.set(bucket, b)
+      const keys = extractTables(q.sql_text)
+      const buckets = keys.length > 0 ? keys : ['\x00other']
+      for (const bucket of buckets) {
+        const b = map.get(bucket) ?? []
+        b.push(q)
+        map.set(bucket, b)
+      }
     }
     const ks = [...map.keys()].filter(k => k !== '\x00other').sort()
     if (map.has('\x00other')) ks.push('\x00other')
     return { map, keys: ks }
   }
 
-  // ── Unsaved history: history entries not already saved, deduped ────────────
-  const unsavedHistory = useMemo(() => {
-    const savedNorms = new Set(saved.map(q => normSql(q.sql_text)))
+  // Unsaved history per connection: entries not already saved, deduped
+  const getUnsavedForConn = (connId: string) => {
+    const connHistory = historyByConn[connId] ?? []
+    const connSaved = saved.filter(q => q.connection_id === connId)
+    const savedNorms = new Set(connSaved.map(q => normSql(q.sql_text)))
     const seen = new Set<string>()
-    return history.filter(e => {
+    return connHistory.filter(e => {
+      if (e.had_error) return false
       const n = normSql(e.sql_text)
       if (savedNorms.has(n) || seen.has(n)) return false
       seen.add(n)
       return true
     })
-  }, [history, saved])
+  }
 
   // ── Search filters ─────────────────────────────────────────────────────────
   const isSearching = searchText.trim().length > 0
@@ -357,21 +409,23 @@ export function QueryExplorer() {
   const filteredUnsaved = useMemo(() => {
     const q = searchText.toLowerCase().trim()
     if (!q) return []
-    return unsavedHistory.filter(e =>
-      e.sql_text.toLowerCase().includes(q) ||
-      (tags[e.id] ?? '').toLowerCase().includes(q) ||
-      extractTables(e.sql_text).some(t => t.includes(q))
+    return allHistory.filter(e =>
+      !e.had_error &&
+      (e.sql_text.toLowerCase().includes(q) ||
+       (tags[e.id] ?? '').toLowerCase().includes(q) ||
+       extractTables(e.sql_text).some(t => t.includes(q)))
     )
-  }, [unsavedHistory, tags, searchText])
+  }, [allHistory, tags, searchText])
 
-  // ── Active match — sync activeQueryId when the active tab changes ──────────
-  // Finds the first saved query whose SQL matches the active tab and marks it.
+  // ── Active match — sync activeQueryId when active tab changes ──────────────
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout>>()
   useEffect(() => {
     const matchId = activeNorm
       ? saved.find(q => normSql(q.sql_text) === activeNorm)?.id ?? null
       : null
     setActiveQueryId(matchId)
+    // Stamp the force-open tracker so panel re-mounts with this same query don't re-open groups
+    if (matchId) _lastForceOpenedId = matchId
     if (!matchId) return
     setLeftPanel('queries')
     clearTimeout(scrollTimerRef.current)
@@ -382,10 +436,10 @@ export function QueryExplorer() {
     return () => clearTimeout(scrollTimerRef.current)
   }, [activeTabId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Scroll to newly-saved query when SavePanel sets pendingScrollToId ───────
   useEffect(() => {
     if (!pendingScrollToId) return
     setActiveQueryId(pendingScrollToId)
+    _lastForceOpenedId = pendingScrollToId
     setLeftPanel('queries')
     clearTimeout(scrollTimerRef.current)
     scrollTimerRef.current = setTimeout(() => {
@@ -396,24 +450,25 @@ export function QueryExplorer() {
     return () => clearTimeout(scrollTimerRef.current)
   }, [pendingScrollToId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleDeleteHistory = async (id: string) => {
-    if (activeConnectionId) await deleteHistory(activeConnectionId, id)
+  const handleDeleteHistory = async (entryId: string, connId: string) => {
+    await deleteHistory(connId, entryId)
   }
 
-  // Open the item's SQL in a new editor tab then open the Save Panel
   const handleItemSave = (sql: string) => {
     openTab(sql)
     openSavePanel()
   }
 
   const hasSel  = selectedIds.size > 0
-  const isEmpty = saved.length === 0 && history.length === 0
+  const isEmpty = saved.length === 0 && allHistory.length === 0
 
-  const hp = (e: QueryHistoryEntry, indent = false) => ({
+  const connIds = [...connectedIds]
+
+  const hp = (e: QueryHistoryEntry, connId: string, indent = false) => ({
     entry: e, tag: tags[e.id], selected: selectedIds.has(e.id),
     isActive: activeNorm !== '' && normSql(e.sql_text) === activeNorm,
-    onOpen: (sql: string) => openTab(sql),
-    onDelete: handleDeleteHistory,
+    onOpen: (sql: string) => openTab(sql, undefined, true),
+    onDelete: (id: string) => handleDeleteHistory(id, connId),
     onSetTag: setTag,
     onToggleSelect: toggleSelect,
     onAISave: () => handleItemSave(e.sql_text),
@@ -426,7 +481,7 @@ export function QueryExplorer() {
 
       {/* Header */}
       <div style={S.header}>
-        <span style={S.title}>Queries</span>
+        <span style={S.title}>Workspace</span>
         <div style={S.headerBtns}>
           {hasSel && (
             <button style={S.clearSelBtn} onClick={() => setSelectedIds(new Set())} title="Clear selection">
@@ -453,72 +508,96 @@ export function QueryExplorer() {
       {/* Body */}
       <div style={S.body}>
 
-        {isEmpty ? (
-          <div style={S.empty}>No queries yet.</div>
+        {/* ── Query Library section ── */}
+        <SectionBlock label="Query Library" badge={saved.length}>
 
-        ) : isSearching ? (
-          filteredSaved.length === 0 && filteredUnsaved.length === 0
-            ? <div style={S.empty}>No matching queries.</div>
-            : <>
-                {filteredSaved.length > 0 && (
-                  <>
-                    <div style={S.sectionLabel}>Saved</div>
-                    {filteredSaved.map(q => (
-                      <SavedItem key={q.id} q={q}
-                        isActive={q.id === activeQueryId}
-                        onOpen={(sql, name) => { setActiveQueryId(q.id); openTab(sql, name) }}
-                        onUpdate={updateSaved}
-                        onDelete={id => deleteSaved(id)}
-                      />
-                    ))}
-                  </>
-                )}
-                {filteredUnsaved.length > 0 && (
-                  <>
-                    <div style={S.sectionLabel}>Unsaved</div>
-                    {filteredUnsaved.map(e => <HistoryItem key={e.id} {...hp(e)} />)}
-                  </>
-                )}
-              </>
+          {isEmpty ? (
+            <div style={S.empty}>No queries yet.</div>
 
-        ) : (
-          <>
-            {savedDbKeys.map(dbKey => {
-              const dbQueries    = savedDbTree.get(dbKey) ?? []
-              const dbHasActive  = !!activeQueryId && dbQueries.some(q => q.id === activeQueryId)
-              const { map: tableMap, keys: tableKeys } = buildTableTree(dbQueries)
-              const dbLabel      = dbKey === '\x00noDb' ? '(unknown)' : dbKey
+          ) : isSearching ? (
+            filteredSaved.length === 0 && filteredUnsaved.length === 0
+              ? <div style={S.empty}>No matching queries.</div>
+              : <>
+                  {filteredSaved.length > 0 && (
+                    <>
+                      <div style={S.sectionLabel}>Saved</div>
+                      {filteredSaved.map(q => (
+                        <SavedItem key={q.id} q={q}
+                          isActive={q.id === activeQueryId}
+                          onOpen={(sql, name) => { setActiveQueryId(q.id); openTab(sql, name, true) }}
+                          onUpdate={updateSaved}
+                          onDelete={id => deleteSaved(id)}
+                        />
+                      ))}
+                    </>
+                  )}
+                  {filteredUnsaved.length > 0 && (
+                    <>
+                      <div style={S.sectionLabel}>Unsaved</div>
+                      {filteredUnsaved.map(e => <HistoryItem key={e.id} {...hp(e, e.connection_id)} />)}
+                    </>
+                  )}
+                </>
 
-              return (
-                <TreeGroup key={dbKey} label={dbLabel} count={dbQueries.length} muted={dbKey === '\x00noDb'} forceOpen={dbHasActive} defaultOpen>
-                  {tableKeys.map(tKey => {
-                    const tableItems     = tableMap.get(tKey) ?? []
-                    const tableHasActive = !!activeQueryId && tableItems.some(q => q.id === activeQueryId)
-                    return (
-                      <TreeGroup key={tKey} label={tKey === '\x00other' ? '(other)' : tKey} count={tableItems.length} muted={tKey === '\x00other'} forceOpen={tableHasActive} level={1}>
-                        {tableItems.map(q => (
-                          <SavedItem key={q.id} q={q}
-                            isActive={q.id === activeQueryId}
-                            onOpen={(sql, name) => { setActiveQueryId(q.id); openTab(sql, name) }}
-                            onUpdate={updateSaved}
-                            onDelete={id => deleteSaved(id)}
-                          />
-                        ))}
+          ) : (
+            <>
+              {connIds.map(connId => {
+                const profile     = profiles.find(p => p.id === connId)
+                const connName    = profile?.name ?? connId
+                const connSaved   = saved.filter(q => q.connection_id === connId)
+                const connUnsaved = getUnsavedForConn(connId)
+                const total       = connSaved.length + connUnsaved.length
+                const hasActive   = !!activeQueryId && (
+                  connSaved.some(q => q.id === activeQueryId) ||
+                  connUnsaved.some(e => normSql(e.sql_text) === activeNorm)
+                )
+                const { map: tableMap, keys: tableKeys } = buildTableTree(connSaved)
+
+                // Only force-open the FIRST table group when this is a freshly-activated query.
+                const isNewForceOpen = activeQueryId !== null && activeQueryId !== _lastForceOpenedId
+                const firstActiveTableKey = isNewForceOpen
+                  ? tableKeys.find(k => (tableMap.get(k) ?? []).some(q => q.id === activeQueryId)) ?? null
+                  : null
+
+                return (
+                  <TreeGroup key={connId} label={connName} count={total} forceOpen={hasActive} defaultOpen>
+                    {tableKeys.map(tKey => {
+                      const tableItems     = tableMap.get(tKey) ?? []
+                      const tableHasActive = tKey === firstActiveTableKey
+                      return (
+                        <TreeGroup key={tKey} label={tKey === '\x00other' ? '(other)' : tKey}
+                          count={tableItems.length} muted={tKey === '\x00other'}
+                          forceOpen={tableHasActive} level={1}>
+                          {tableItems.map(q => (
+                            <SavedItem key={q.id} q={q}
+                              isActive={q.id === activeQueryId}
+                              onOpen={(sql, name) => { setActiveQueryId(q.id); openTab(sql, name, true) }}
+                              onUpdate={updateSaved}
+                              onDelete={id => deleteSaved(id)}
+                            />
+                          ))}
+                        </TreeGroup>
+                      )
+                    })}
+                    {connUnsaved.length > 0 && (
+                      <TreeGroup label="Unsaved" count={connUnsaved.length} accent level={1}
+                        forceOpen={connUnsaved.some(e => normSql(e.sql_text) === activeNorm)}>
+                        {connUnsaved.map(e => <HistoryItem key={e.id} {...hp(e, connId, true)} />)}
                       </TreeGroup>
-                    )
-                  })}
-                </TreeGroup>
-              )
-            })}
+                    )}
+                  </TreeGroup>
+                )
+              })}
+            </>
+          )}
 
-            {unsavedHistory.length > 0 && (
-              <TreeGroup label="Unsaved Queries" count={unsavedHistory.length} accent
-                forceOpen={!!activeQueryId && unsavedHistory.some(e => e.id === activeQueryId)}>
-                {unsavedHistory.map(e => <HistoryItem key={e.id} {...hp(e, true)} />)}
-              </TreeGroup>
-            )}
-          </>
-        )}
+        </SectionBlock>
+
+        {/* ── Projects section ── */}
+        <ProjectsSection
+          saved={saved}
+          onOpen={(sql, name) => openTab(sql, name, true)}
+        />
 
       </div>
     </div>

@@ -30,9 +30,10 @@ class ConnectionProfile(Base):
     host       = Column(String(255), nullable=True,  default="")  # not used for SQLite
     port       = Column(Integer,     nullable=True)
     database   = Column(String(500), nullable=False)              # file path for SQLite, DB name for others
-    username   = Column(String(100), nullable=True,  default="")  # not used for SQLite
-    password   = Column(String(255), nullable=True,  default="")  # not used for SQLite
-    created_at = Column(DateTime, default=datetime.utcnow)
+    username     = Column(String(100), nullable=True,  default="")   # not used for SQLite
+    password     = Column(String(255), nullable=True,  default="")   # not used for SQLite
+    windows_auth = Column(Boolean,     nullable=True,  default=False) # MSSQL Windows Authentication
+    created_at   = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 

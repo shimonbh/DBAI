@@ -47,6 +47,21 @@ Return only the SQL query — no explanations, no markdown code blocks.
 
 Description: {description}"""
 
+TEXT_TO_SQL_ASK = """\
+The user has a question about the database, its schema, or SQL in general.
+Answer helpfully and conversationally. Explain concepts clearly.
+If a SQL example is useful, include it — but plain text explanations are fine too.
+
+Question: {description}"""
+
+TEXT_TO_SQL_PLAN = """\
+Plan an approach for the following data requirement, then produce the SQL.
+
+First, briefly outline your plan in 2-4 bullet points (what tables, joins, filters, aggregations are needed).
+Then provide the complete, well-formatted {db_type} SQL query.
+
+Requirement: {description}"""
+
 # ── Query Analysis ────────────────────────────────────────────────────────────
 
 QUERY_ANALYSIS = """\

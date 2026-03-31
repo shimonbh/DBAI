@@ -8,6 +8,8 @@ export interface ConnectionProfile {
   port?: number
   database: string
   username: string
+  password?: string
+  windows_auth?: boolean
   is_connected: boolean
   created_at: string
   updated_at: string
@@ -21,4 +23,5 @@ export interface ConnectionFormData {
   database: string
   username: string
   password: string
+  windows_auth?: boolean
 }

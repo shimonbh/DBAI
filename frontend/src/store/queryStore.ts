@@ -3,12 +3,14 @@ import type { QueryHistoryEntry, SavedQuery } from '@/types/query'
 import { queryService } from '@/services/queryService'
 
 interface QueryState {
-  history: QueryHistoryEntry[]
+  /** History entries keyed by connection id */
+  historyByConn: Record<string, QueryHistoryEntry[]>
   saved: SavedQuery[]
   isLoading: boolean
 
   loadHistory: (connectionId: string) => Promise<void>
   searchHistory: (connectionId: string, q: string) => Promise<void>
+  pushHistoryEntry: (entry: QueryHistoryEntry) => void
   loadSaved: (connectionId?: string) => Promise<void>
   saveQuery: (data: Partial<SavedQuery>) => Promise<SavedQuery>
   updateSaved: (id: string, data: Partial<SavedQuery>) => Promise<void>
@@ -17,7 +19,7 @@ interface QueryState {
 }
 
 export const useQueryStore = create<QueryState>((set, get) => ({
-  history: [],
+  historyByConn: {},
   saved: [],
   isLoading: false,
 
@@ -25,7 +27,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     set({ isLoading: true })
     try {
       const history = await queryService.getHistory(connectionId)
-      set({ history, isLoading: false })
+      set(s => ({ historyByConn: { ...s.historyByConn, [connectionId]: history }, isLoading: false }))
     } catch {
       set({ isLoading: false })
     }
@@ -34,8 +36,16 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   searchHistory: async (connectionId, q) => {
     if (!q.trim()) { return get().loadHistory(connectionId) }
     const history = await queryService.searchHistory(connectionId, q)
-    set({ history })
+    set(s => ({ historyByConn: { ...s.historyByConn, [connectionId]: history } }))
   },
+
+  pushHistoryEntry: (entry) =>
+    set(s => ({
+      historyByConn: {
+        ...s.historyByConn,
+        [entry.connection_id]: [entry, ...(s.historyByConn[entry.connection_id] ?? [])],
+      },
+    })),
 
   loadSaved: async (connectionId) => {
     const saved = await queryService.getSaved(connectionId)
@@ -55,7 +65,12 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
   deleteHistory: async (connectionId, id) => {
     await queryService.deleteHistory(connectionId, id)
-    set(s => ({ history: s.history.filter(h => h.id !== id) }))
+    set(s => ({
+      historyByConn: {
+        ...s.historyByConn,
+        [connectionId]: (s.historyByConn[connectionId] ?? []).filter(h => h.id !== id),
+      },
+    }))
   },
 
   deleteSaved: async (id) => {

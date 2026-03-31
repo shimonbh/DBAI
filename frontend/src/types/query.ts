@@ -37,4 +37,10 @@ export interface EditorTab {
   result: QueryResult | null
   isDirty: boolean
   selectedDatabase: string | null
+  /** Connection this tab is bound to (set when opened from the explorer).
+   *  Query execution uses this first; falls back to the caller-supplied connectionId. */
+  connectionId?: string
+  /** Set when the tab was opened from the schema/query explorer (not typed by the user).
+   *  Cleared the moment the user edits the SQL. Prevents history recording on execute. */
+  fromExplorer?: boolean
 }

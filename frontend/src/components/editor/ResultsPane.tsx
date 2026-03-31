@@ -7,6 +7,38 @@ import { theme } from '@/theme'
 import type { QueryResult } from '@/types/query'
 
 type BottomTab = 'results' | 'messages' | 'ask-ai' | 'ai-analyze'
+type AIMode    = 'ask' | 'plan' | 'write' | 'analyze'
+
+/** SQL keywords that can start a runnable statement. */
+const SQL_START = /^(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|WITH|EXEC|EXECUTE|CALL|TRUNCATE|MERGE|REPLACE|USE|BEGIN|DELIMITER)\b/i
+
+/**
+ * Try to extract a runnable SQL block from an AI response.
+ * For plain SQL responses (write mode) the whole text IS the query.
+ * For mixed responses (plan mode) the SQL block appears after the explanation.
+ * Returns null if no SQL is found (plain-chat answer).
+ */
+function extractSQL(text: string): string | null {
+  const t = text.trim()
+  // Entire response is SQL
+  if (SQL_START.test(t)) return t
+  // SQL block appears after an explanation — scan paragraphs from the bottom
+  const paragraphs = t.split(/\n{2,}/)
+  for (let i = paragraphs.length - 1; i >= 0; i--) {
+    const p = paragraphs[i].trim()
+    if (SQL_START.test(p)) return p
+  }
+  return null
+}
+
+const AI_MODE_KEY = 'dbai_ai_mode'
+
+const AI_MODES: { id: AIMode; label: string; placeholder: string; btnLabel: string; title: string }[] = [
+  { id: 'ask',     label: 'Ask',     placeholder: 'Ask a question about your data or schema…',            btnLabel: '→ Ask',     title: 'Conversational — answers questions and explains concepts' },
+  { id: 'plan',    label: 'Plan',    placeholder: 'Describe what you need — AI will plan then write SQL…', btnLabel: '→ Plan',    title: 'Think-first — outlines the approach, then produces SQL' },
+  { id: 'write',   label: 'Write',   placeholder: 'Describe what you want to query…',                     btnLabel: '→ SQL',     title: 'Direct SQL generation from your description (default)' },
+  { id: 'analyze', label: 'Analyze', placeholder: 'Analyzes the current SQL in the editor…',              btnLabel: '→ Analyze', title: 'Analyzes the SQL in the editor for issues and improvements' },
+]
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -33,6 +65,16 @@ export function ResultsPane({ tabId }: { tabId: string }) {
   const [chat, setChat]           = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
+  const [aiMode, setAiMode]       = useState<AIMode>(
+    () => (localStorage.getItem(AI_MODE_KEY) as AIMode | null) ?? 'write'
+  )
+
+  const changeAIMode = (m: AIMode) => {
+    setAiMode(m)
+    localStorage.setItem(AI_MODE_KEY, m)
+  }
+
+  const currentAIMode = AI_MODES.find(m => m.id === aiMode) ?? AI_MODES[2]
   const chatEndRef = useRef<HTMLDivElement>(null)
   const prevResultRef = useRef<unknown>(null)
 
@@ -42,7 +84,7 @@ export function ResultsPane({ tabId }: { tabId: string }) {
 
   const {
     tabs, activeTabId,
-    analysisResult, isAnalyzing, setAnalysis, analyzeQuery, updateTabSql, clearResult,
+    analysisResult, isAnalyzing, setAnalysis, analyzeQuery, updateTabSql, clearResult, openTab,
   } = useEditorStore()
   const { activeConnectionId } = useConnectionStore(s => ({
     activeConnectionId: s.activeConnectionId,
@@ -51,11 +93,14 @@ export function ResultsPane({ tabId }: { tabId: string }) {
   const tab    = tabs.find(t => t.id === tabId)
   const result = tab?.result
 
-  // Auto-switch to Results/Messages when a query finishes
+  // Auto-switch to Results/Messages when a query finishes.
+  // Show Messages when there's an error OR when the query returned no columns
+  // (non-SELECT statements: INSERT/UPDATE/DELETE/DDL have nothing to display in the grid).
   useEffect(() => {
     if (result && result !== prevResultRef.current) {
       prevResultRef.current = result
-      setActiveTab(result.error ? 'messages' : 'results')
+      const noGrid = result.error || result.columns.length === 0
+      setActiveTab(noGrid ? 'messages' : 'results')
     }
   }, [result])
 
@@ -72,34 +117,56 @@ export function ResultsPane({ tabId }: { tabId: string }) {
 
   // ── Ask AI ────────────────────────────────────────────────────────────────
   const handleAsk = async () => {
+    if (!activeConnectionId || aiLoading) return
+
+    // Analyze mode: run analysis on current SQL and switch to the Analyze tab
+    if (aiMode === 'analyze') {
+      analyzeQuery(activeConnectionId)
+      return
+    }
+
     const q = chatInput.trim()
-    if (!q || !activeConnectionId || aiLoading) return
+    if (!q) return
 
     // Build multi-turn history from prior messages so the AI can refine answers.
-    // User turns use the typed description; assistant turns use the generated SQL
-    // (or error text if no SQL was returned).
     const isFollowUp = chat.length > 0
     const history = isFollowUp
-      ? chat.map(msg => ({
-          role: msg.role,
-          content: msg.sql ?? msg.text,
-        }))
+      ? chat.map(msg => ({ role: msg.role, content: msg.sql ?? msg.text }))
       : undefined
 
     setChatInput('')
     setChat(prev => [...prev, { role: 'user', text: q }])
     setAiLoading(true)
     try {
-      const activeTab2 = useEditorStore.getState().tabs.find(
-        t => t.id === useEditorStore.getState().activeTabId
-      )
-      const sql = await aiService.textToSQL(activeConnectionId, q, {
+      const storeState  = useEditorStore.getState()
+      const activeTab2  = storeState.tabs.find(t => t.id === storeState.activeTabId)
+      const response    = await aiService.textToSQL(activeConnectionId, q, {
         database: activeTab2?.selectedDatabase ?? undefined,
         history,
+        mode: aiMode === 'write' ? undefined : aiMode,
       })
 
-      const replyText = isFollowUp ? 'Here\'s the updated query:' : 'Here\'s a query for that:'
-      setChat(prev => [...prev, { role: 'assistant', text: replyText, sql }])
+      const extractedSQL = extractSQL(response)
+
+      if (extractedSQL) {
+        // Auto-open the runnable SQL in a new editor tab
+        openTab(extractedSQL)
+
+        // For plan mode: show the explanation text before the SQL in the bubble.
+        // For other modes: show a short confirmation line.
+        const explanationText = aiMode === 'plan'
+          ? response.replace(extractedSQL, '').trim()
+          : isFollowUp ? 'Here\'s the updated query:' : 'Here\'s a query for that:'
+
+        setChat(prev => [...prev, {
+          role: 'assistant',
+          text: explanationText || 'Query opened in editor.',
+          sql: extractedSQL,
+        }])
+      } else {
+        // Plain-text answer (no runnable SQL) — show in chat only
+        setChat(prev => [...prev, { role: 'assistant', text: response }])
+      }
     } catch (e: unknown) {
       setChat(prev => [...prev, { role: 'assistant', text: `Error: ${(e as Error).message}` }])
     } finally {
@@ -252,6 +319,11 @@ export function ResultsPane({ tabId }: { tabId: string }) {
                 <span style={S.errorIcon}>⚠</span>
                 <pre style={S.errorText}>{result.error}</pre>
               </div>
+            ) : result.columns.length === 0 ? (
+              <div style={{ color: '#a6e3a1', fontSize: 12 }}>
+                ✓ Query executed successfully in {result.duration_ms}ms
+                {result.row_count > 0 && ` — ${result.row_count.toLocaleString()} row${result.row_count !== 1 ? 's' : ''} affected`}
+              </div>
             ) : (
               <div style={{ color: '#a6e3a1', fontSize: 12 }}>
                 ✓ Query completed — {result.row_count.toLocaleString()} rows in {result.duration_ms}ms
@@ -295,21 +367,41 @@ export function ResultsPane({ tabId }: { tabId: string }) {
               <div ref={chatEndRef} />
             </div>
 
+            {/* Mode selector */}
+            <div style={S.modeRow}>
+              <span style={S.modeLabel}>Mode:</span>
+              <div style={S.modeGroup}>
+                {AI_MODES.map(m => (
+                  <button
+                    key={m.id}
+                    style={{ ...S.modeBtn, ...(aiMode === m.id ? S.modeBtnActive : S.modeBtnInactive) }}
+                    onClick={() => changeAIMode(m.id)}
+                    title={m.title}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div style={S.chatInputRow}>
               <input
-                style={S.chatInput}
-                placeholder="Describe what you want to query…"
+                style={{ ...S.chatInput, opacity: aiMode === 'analyze' ? 0.45 : 1 }}
+                placeholder={currentAIMode.placeholder}
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleAsk() }}
-                disabled={aiLoading || !activeConnectionId}
+                disabled={aiLoading || !activeConnectionId || aiMode === 'analyze'}
               />
               <button
-                style={{ ...S.sendBtn, opacity: chatInput.trim() && activeConnectionId ? 1 : 0.4 }}
+                style={{
+                  ...S.sendBtn,
+                  opacity: (aiMode === 'analyze' || chatInput.trim()) && activeConnectionId ? 1 : 0.4,
+                }}
                 onClick={handleAsk}
-                disabled={aiLoading || !chatInput.trim() || !activeConnectionId}
+                disabled={aiLoading || !activeConnectionId || (aiMode !== 'analyze' && !chatInput.trim())}
               >
-                → SQL
+                {aiLoading ? '…' : currentAIMode.btnLabel}
               </button>
             </div>
           </div>
@@ -504,7 +596,13 @@ const S = {
   sqlBtns:       { display: 'flex', gap: 6, marginTop: 4 },
   openBtn:       { background: 'none', border: '1px solid var(--border-color)', borderRadius: 4, padding: '3px 9px', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11 },
   runBtn:        { background: 'var(--accent-color)', border: 'none', borderRadius: 4, padding: '3px 9px', color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 600 as const },
-  chatInputRow:  { display: 'flex', gap: 6, padding: '8px 10px', borderTop: '1px solid var(--border-color)', flexShrink: 0 },
+  modeRow:       { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px 2px', flexShrink: 0 },
+  modeLabel:     { fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' as const },
+  modeGroup:     { display: 'flex', gap: 2, background: 'rgba(0,0,0,0.25)', borderRadius: 6, padding: 2, border: '1px solid var(--border-color)' },
+  modeBtn:       { border: 'none', borderRadius: 4, padding: '3px 9px', cursor: 'pointer', fontSize: 11, fontWeight: 600 as const, transition: 'background 0.12s, color 0.12s' },
+  modeBtnActive: { background: 'var(--accent-color)', color: '#fff' },
+  modeBtnInactive:{ background: 'transparent', color: 'var(--text-muted)' },
+  chatInputRow:  { display: 'flex', gap: 6, padding: '6px 10px 8px', flexShrink: 0 },
   chatInput:     { flex: 1, background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: 5, padding: '7px 10px', color: 'var(--text-primary)', fontSize: 12, outline: 'none' },
   sendBtn:       { background: 'var(--accent-color)', border: 'none', borderRadius: 5, padding: '7px 14px', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 as const, whiteSpace: 'nowrap' as const },
 

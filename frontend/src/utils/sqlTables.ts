@@ -18,6 +18,12 @@ const SKIP = new Set([
 export function extractTables(sql: string): string[] {
   const tables = new Set<string>()
 
+  // Strip comments before parsing so words inside comments aren't matched as table names.
+  // Remove single-line comments (--) and multi-line comments (/* */).
+  const stripped = sql
+    .replace(/--[^\r\n]*/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+
   // Optional schema prefix: word, [bracketed], "quoted", or `backtick` followed by a dot
   // Then the actual table identifier in any quoting style, or a plain word.
   // Capture groups: 1 = "double-quoted"  2 = `backtick`  3 = [bracket]  4 = plain
@@ -25,7 +31,7 @@ export function extractTables(sql: string): string[] {
     /\b(?:FROM|JOIN|UPDATE|INTO)\s+(?:(?:\w+|\[[^\]]+\]|"[^"]+"|`[^`]+`)\s*\.\s*)?(?:"([^"]+)"|`([^`]+)`|\[([^\]]+)\]|(\w+))/gi
 
   let m
-  while ((m = re.exec(sql)) !== null) {
+  while ((m = re.exec(stripped)) !== null) {
     const raw = (m[1] ?? m[2] ?? m[3] ?? m[4] ?? '').toLowerCase().trim()
     // Apply SKIP only to plain (unquoted) identifiers — a quoted name is always intentional
     if (raw && (m[4] == null || !SKIP.has(raw.toUpperCase()))) {

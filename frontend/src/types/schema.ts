@@ -13,10 +13,32 @@ export interface IndexInfo {
   is_primary: boolean
 }
 
+export interface TriggerInfo {
+  name: string
+  timing: string   // BEFORE | AFTER | INSTEAD OF
+  event: string    // INSERT | UPDATE | DELETE | INSERT, UPDATE, ...
+  body?: string    // Full trigger body / function definition returned by the DB
+}
+
+export interface ConstraintInfo {
+  name: string
+  definition: string
+}
+
+export interface ForeignKeyInfo {
+  name: string
+  columns: string
+  ref_table: string
+  ref_columns: string
+}
+
 export interface TableSchema {
   name: string
   columns: ColumnInfo[]
   indexes: IndexInfo[]
+  triggers: TriggerInfo[]
+  constraints: ConstraintInfo[]
+  foreign_keys: ForeignKeyInfo[]
 }
 
 export interface ViewSchema {
@@ -24,9 +46,15 @@ export interface ViewSchema {
   columns: ColumnInfo[]
 }
 
+export interface ProcedureParam {
+  name: string
+  data_type: string
+}
+
 export interface ProcedureSchema {
   name: string
   definition: string | null
+  parameters?: ProcedureParam[]
 }
 
 export interface SchemaDatabase {

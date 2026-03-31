@@ -7,6 +7,7 @@ from typing import Any
 from datetime import datetime
 
 from backend.connectors.base import BaseConnector
+from backend.config import CONNECTION_TIMEOUT_SEC
 
 
 class PostgreSQLConnector(BaseConnector):
@@ -23,7 +24,7 @@ class PostgreSQLConnector(BaseConnector):
                 dbname=p["database"],
                 user=p["username"],
                 password=p["password"],
-                connect_timeout=10,
+                connect_timeout=CONNECTION_TIMEOUT_SEC,
             )
             self._connection.autocommit = True
         except psycopg2.Error as e:
@@ -110,6 +111,70 @@ class PostgreSQLConnector(BaseConnector):
         """
         return self.execute_query(sql)
 
+    def get_triggers(self, database: str, table: str) -> list[dict]:
+        sql = """
+            SELECT
+                tg.trigger_name                                                         AS name,
+                tg.action_timing                                                        AS timing,
+                string_agg(tg.event_manipulation, ', ' ORDER BY tg.event_manipulation) AS event,
+                pg_get_functiondef(pt.tgfoid)                                           AS body
+            FROM information_schema.triggers tg
+            JOIN pg_trigger pt
+                ON pt.tgname = tg.trigger_name
+            WHERE tg.trigger_schema = 'public' AND tg.event_object_table = %s
+            GROUP BY tg.trigger_name, tg.action_timing, pt.tgfoid
+            ORDER BY tg.trigger_name
+        """
+        return self.execute_query(sql, (table,))
+
+    def get_constraints(self, database: str, table: str) -> list[dict]:
+        sql = """
+            SELECT
+                cc.constraint_name  AS name,
+                cc.check_clause     AS definition
+            FROM information_schema.check_constraints cc
+            JOIN information_schema.table_constraints tc
+                ON  tc.constraint_name   = cc.constraint_name
+                AND tc.constraint_schema = cc.constraint_schema
+            WHERE tc.table_schema = 'public' AND tc.table_name = %s
+            ORDER BY cc.constraint_name
+        """
+        return self.execute_query(sql, (table,))
+
+    def get_foreign_keys(self, database: str, table: str) -> list[dict]:
+        sql = """
+            SELECT
+                kcu.constraint_name                                                  AS name,
+                string_agg(kcu.column_name, ', ' ORDER BY kcu.ordinal_position)     AS columns,
+                ccu.table_name                                                       AS ref_table,
+                string_agg(ccu.column_name, ', ' ORDER BY kcu.ordinal_position)     AS ref_columns
+            FROM information_schema.key_column_usage kcu
+            JOIN information_schema.referential_constraints rc
+                ON kcu.constraint_name = rc.constraint_name
+            JOIN information_schema.constraint_column_usage ccu
+                ON rc.unique_constraint_name = ccu.constraint_name
+            WHERE kcu.table_schema = 'public' AND kcu.table_name = %s
+            GROUP BY kcu.constraint_name, ccu.table_name
+            ORDER BY kcu.constraint_name
+        """
+        return self.execute_query(sql, (table,))
+
+    def get_procedure_params(self, database: str, procedure: str) -> list[dict]:
+        sql = """
+            SELECT
+                p.parameter_name AS name,
+                p.data_type
+            FROM information_schema.routines r
+            JOIN information_schema.parameters p
+                ON p.specific_name = r.specific_name
+               AND p.specific_schema = r.routine_schema
+            WHERE r.routine_schema = 'public'
+              AND r.routine_name = %s
+              AND p.parameter_mode IN ('IN', 'INOUT')
+            ORDER BY p.ordinal_position
+        """
+        return self.execute_query(sql, (procedure,))
+
     def get_indexes(self, database: str, table: str) -> list[dict]:
         sql = """
             SELECT
@@ -132,6 +197,53 @@ class PostgreSQLConnector(BaseConnector):
             ORDER BY i.relname
         """
         return self.execute_query(sql, (table,))
+
+    def get_security(self, database: str) -> dict:
+        # Roles / users
+        role_rows = self.execute_query("""
+            SELECT
+                rolname        AS name,
+                rolsuper       AS is_superuser,
+                rolcanlogin    AS can_login,
+                rolcreatedb    AS can_create_db,
+                rolcreaterole  AS can_create_role,
+                rolreplication AS can_replicate
+            FROM pg_roles
+            WHERE rolname NOT LIKE 'pg_%'
+            ORDER BY rolcanlogin DESC, rolname
+        """)
+
+        users = []
+        roles = []
+        for r in role_rows:
+            attrs = []
+            if r.get("is_superuser"):   attrs.append("SUPERUSER")
+            if r.get("can_login"):      attrs.append("LOGIN")
+            if r.get("can_create_db"):  attrs.append("CREATEDB")
+            if r.get("can_create_role"):attrs.append("CREATEROLE")
+            if r.get("can_replicate"):  attrs.append("REPLICATION")
+            entry = {"name": r["name"], "type": "login" if r.get("can_login") else "role", "attributes": attrs}
+            if r.get("can_login"):
+                users.append(entry)
+            else:
+                roles.append(entry)
+
+        # Role memberships
+        member_rows = self.execute_query("""
+            SELECT r.rolname AS role, m.rolname AS member
+            FROM pg_auth_members am
+            JOIN pg_roles r ON r.oid = am.roleid
+            JOIN pg_roles m ON m.oid = am.member
+            WHERE r.rolname NOT LIKE 'pg_%'
+            ORDER BY r.rolname, m.rolname
+        """)
+        membership: dict[str, list[str]] = {}
+        for row in member_rows:
+            membership.setdefault(row["role"], []).append(row["member"])
+        for role in roles:
+            role["members"] = membership.get(role["name"], [])
+
+        return {"users": users, "roles": roles}
 
     # ── Monitoring ────────────────────────────────────────────────────────────
 

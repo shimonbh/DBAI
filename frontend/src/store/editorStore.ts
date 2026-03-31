@@ -5,6 +5,7 @@ import { queryService } from '@/services/queryService'
 import { aiService } from '@/services/aiService'
 import { stripSqlHeader } from '@/utils/sqlHeader'
 import { theme } from '@/theme'
+import { useQueryStore } from '@/store/queryStore'
 
 let _tabCounter = 1
 
@@ -21,7 +22,7 @@ interface EditorState {
   isExecuting: boolean
   queryLimit: number
 
-  openTab: (sql?: string, title?: string) => string
+  openTab: (sql?: string, title?: string, fromExplorer?: boolean, connectionId?: string) => string
   closeTab: (tabId: string) => void
   moveTab: (fromIdx: number, toIdx: number) => void
   closeTabsToRight: (tabId: string) => void
@@ -40,17 +41,19 @@ interface EditorState {
   executeQueryText: (connectionId: string, sql: string) => Promise<void>
   cancelQuery: () => void
   generateFullQuery: (connectionId: string) => Promise<void>
-  generateTextToSQL: (connectionId: string, description: string) => Promise<void>
+  generateTextToSQL: (connectionId: string, description: string, mode?: string) => Promise<void>
   analyzeQuery: (connectionId: string) => Promise<void>
 }
 
-const _newTab = (sql = '', title?: string): EditorTab => ({
+const _newTab = (sql = '', title?: string, fromExplorer = false, connectionId?: string): EditorTab => ({
   id: `tab-${_tabCounter++}`,
   title: title ?? `Query ${_tabCounter - 1}`,
   sql,
   result: null,
   isDirty: false,
   selectedDatabase: null,
+  connectionId,
+  fromExplorer,
 })
 
 export const useEditorStore = create<EditorState>((set, get) => {
@@ -66,8 +69,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
     isExecuting: false,
     queryLimit: theme.queryLimit,
 
-    openTab: (sql = '', title) => {
-      const tab = _newTab(sql, title)
+    openTab: (sql = '', title, fromExplorer = false, connectionId?: string) => {
+      const tab = _newTab(sql, title, fromExplorer, connectionId)
       set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id }))
       return tab.id
     },
@@ -114,7 +117,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
 
     updateTabSql: (tabId, sql) =>
       set(s => ({
-        tabs: s.tabs.map(t => t.id === tabId ? { ...t, sql, isDirty: true } : t),
+        tabs: s.tabs.map(t => t.id === tabId ? { ...t, sql, isDirty: true, fromExplorer: false } : t),
       })),
 
     updateTabDatabase: (tabId, db) =>
@@ -157,15 +160,30 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const { tabs, activeTabId, queryLimit } = get()
       const tab = tabs.find(t => t.id === activeTabId)
       if (!tab?.sql.trim()) return
+      const effectiveConnId = tab.connectionId ?? connectionId
       _abortCtrl?.abort()
       _abortCtrl = new AbortController()
+      const trackHistory = !tab.fromExplorer
       set({ isExecuting: true })
       try {
         const result = await queryService.execute(
-          connectionId, tab.sql, tab.selectedDatabase ?? undefined,
-          queryLimit, _abortCtrl.signal,
+          effectiveConnId, tab.sql, tab.selectedDatabase ?? undefined,
+          queryLimit, _abortCtrl.signal, trackHistory,
         )
         get().setResult(activeTabId, result)
+        // Push to history store immediately so the Queries panel updates live
+        if (trackHistory && result.query_id) {
+          useQueryStore.getState().pushHistoryEntry({
+            id:           result.query_id,
+            connection_id: effectiveConnId,
+            sql_text:     tab.sql,
+            executed_at:  new Date().toISOString(),
+            duration_ms:  result.duration_ms,
+            row_count:    result.row_count,
+            had_error:    !!result.error,
+            error_message: result.error ?? null,
+          })
+        }
       } catch (e: unknown) {
         if (_isAbort(e)) return
         get().setResult(activeTabId, {
@@ -191,6 +209,18 @@ export const useEditorStore = create<EditorState>((set, get) => {
           queryLimit, _abortCtrl.signal,
         )
         get().setResult(activeTabId, result)
+        if (result.query_id) {
+          useQueryStore.getState().pushHistoryEntry({
+            id:            result.query_id,
+            connection_id: connectionId,
+            sql_text:      sql,
+            executed_at:   new Date().toISOString(),
+            duration_ms:   result.duration_ms,
+            row_count:     result.row_count,
+            had_error:     !!result.error,
+            error_message: result.error ?? null,
+          })
+        }
       } catch (e: unknown) {
         if (_isAbort(e)) return
         get().setResult(activeTabId, {
@@ -218,13 +248,14 @@ export const useEditorStore = create<EditorState>((set, get) => {
       }
     },
 
-    generateTextToSQL: async (connectionId, description) => {
+    generateTextToSQL: async (connectionId, description, mode) => {
       const { activeTabId, tabs } = get()
       const tab = tabs.find(t => t.id === activeTabId)
       set({ isGenerating: true })
       try {
         const sql = await aiService.textToSQL(connectionId, description, {
           database: tab?.selectedDatabase ?? undefined,
+          mode,
         })
         get().updateTabSql(activeTabId, sql)
       } finally {

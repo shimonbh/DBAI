@@ -92,6 +92,43 @@ class BaseConnector(ABC):
         """
         return []
 
+    def get_procedure_params(self, database: str, procedure: str) -> list[dict]:
+        """
+        Return parameter metadata for a stored procedure.
+        Each dict: {name: str, data_type: str}
+        Override in connectors that support parameter introspection.
+        """
+        return []
+
+    def get_triggers(self, database: str, table: str) -> list[dict]:
+        """
+        Return trigger metadata for a table.
+        Each dict: {name: str, timing: str, event: str}
+        """
+        return []
+
+    def get_constraints(self, database: str, table: str) -> list[dict]:
+        """
+        Return CHECK constraint metadata for a table.
+        Each dict: {name: str, definition: str}
+        """
+        return []
+
+    def get_foreign_keys(self, database: str, table: str) -> list[dict]:
+        """
+        Return foreign key metadata for a table.
+        Each dict: {name: str, columns: str, ref_table: str, ref_columns: str}
+        """
+        return []
+
+    def get_security(self, database: str) -> dict:
+        """
+        Return security info: users/logins and roles with memberships.
+        Returns: { users: [{name, type, attributes: [str]}], roles: [{name, members: [str]}] }
+        Override in connectors that support security introspection.
+        """
+        return {"users": [], "roles": []}
+
     # ── Monitoring ────────────────────────────────────────────────────────────
 
     @abstractmethod
