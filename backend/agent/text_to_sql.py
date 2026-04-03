@@ -20,6 +20,7 @@ class TextToSQLAgent:
         max_tokens: int = 800,
         history: list[dict] | None = None,
         mode: str | None = None,   # 'ask' | 'plan' | 'write' (default)
+        header_instruction: str = "",
     ) -> str:
         """Convert a natural language description to a SQL query.
 
@@ -31,6 +32,9 @@ class TextToSQLAgent:
             db_type=self.db_type,
             schema_context=self.schema_context,
         )
+        # Only inject header instruction for pure SQL-writing modes
+        if header_instruction and mode not in ('ask', 'plan'):
+            system += header_instruction
 
         if history:
             # Multi-turn: carry the prior conversation, append the new request

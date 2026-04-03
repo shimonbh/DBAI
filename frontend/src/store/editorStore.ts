@@ -6,6 +6,7 @@ import { aiService } from '@/services/aiService'
 import { stripSqlHeader } from '@/utils/sqlHeader'
 import { theme } from '@/theme'
 import { useQueryStore } from '@/store/queryStore'
+import { useUIStore } from '@/store/uiStore'
 
 let _tabCounter = 1
 
@@ -237,10 +238,13 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const { tabs, activeTabId } = get()
       const tab = tabs.find(t => t.id === activeTabId)
       if (!tab) return
+      const { aiHeaderEnabled, aiHeaderUser } = useUIStore.getState()
       set({ isGenerating: true })
       try {
         const sql = await aiService.completeQuery(connectionId, tab.sql, {
           database: tab.selectedDatabase ?? undefined,
+          ai_header_enabled: aiHeaderEnabled,
+          ai_header_author: aiHeaderUser,
         })
         get().updateTabSql(activeTabId, sql)
       } finally {
@@ -251,11 +255,14 @@ export const useEditorStore = create<EditorState>((set, get) => {
     generateTextToSQL: async (connectionId, description, mode) => {
       const { activeTabId, tabs } = get()
       const tab = tabs.find(t => t.id === activeTabId)
+      const { aiHeaderEnabled, aiHeaderUser } = useUIStore.getState()
       set({ isGenerating: true })
       try {
         const sql = await aiService.textToSQL(connectionId, description, {
           database: tab?.selectedDatabase ?? undefined,
           mode,
+          ai_header_enabled: aiHeaderEnabled,
+          ai_header_author: aiHeaderUser,
         })
         get().updateTabSql(activeTabId, sql)
       } finally {

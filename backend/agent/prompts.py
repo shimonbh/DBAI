@@ -85,6 +85,19 @@ Provide your analysis in exactly this structure:
 [The rewritten, improved version of the query. If no changes needed, repeat the original.]
 """
 
+# ── SQL Header Instruction (injected into system prompt when header is enabled) ─
+
+SQL_HEADER_INSTRUCTION = """\
+
+When returning SQL, always wrap it with this exact comment block (no exceptions):
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Generated: {timestamp}
+{author_line}-- Purpose  : <one-line description of what this query does>
+-- ─────────────────────────────────────────────────────────────────────────────
+<SQL here>
+-- ─────────────────────────────────────────────────────────────────────────────
+Fill in the Purpose line with a real one-sentence description of the query."""
+
 # ── Query Namer ───────────────────────────────────────────────────────────────
 
 QUERY_NAMER = """\

@@ -1,7 +1,13 @@
 import api from './api'
 import type { AnalysisResult, AIProvider } from '@/types/ai'
 
-interface AIOverride { provider?: string; model?: string; database?: string }
+interface AIOverride {
+  provider?: string
+  model?: string
+  database?: string
+  ai_header_enabled?: boolean
+  ai_header_author?: string
+}
 
 /** A single turn in an Ask AI conversation (sent to the backend as multi-turn context). */
 export interface ConversationMessage { role: 'user' | 'assistant'; content: string }

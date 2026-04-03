@@ -22,6 +22,7 @@ class FullQueryAgent:
         provider: str | None = None,
         model: str | None = None,
         max_tokens: int = 500,
+        header_instruction: str = "",
     ) -> str:
         """Generate a complete SQL query from partial input / editor context."""
         ai, model = AIProviderRegistry.get(provider, model)
@@ -29,6 +30,8 @@ class FullQueryAgent:
             db_type=self.db_type,
             schema_context=self.schema_context,
         )
+        if header_instruction:
+            system += header_instruction
         user_msg = FULL_QUERY_GENERATION.format(context=context)
         messages = [{"role": "user", "content": user_msg}]
 

@@ -23,9 +23,11 @@ router = APIRouter()
 # ── Pydantic Schemas ──────────────────────────────────────────────────────────
 
 class AIRequestBase(BaseModel):
-    database: str | None = None   # Focus schema context on this DB
-    provider: str | None = None   # Override active provider
-    model: str | None = None      # Override default model
+    database: str | None = None         # Focus schema context on this DB
+    provider: str | None = None         # Override active provider
+    model: str | None = None            # Override default model
+    ai_header_enabled: bool = False     # Prepend/append comment header to generated SQL
+    ai_header_author: str = ""          # Author name for the header (optional)
 
 
 class AutocompleteRequest(AIRequestBase):
@@ -68,6 +70,7 @@ class ProviderSettingIn(BaseModel):
 async def autocomplete(connection_id: str, req: AutocompleteRequest):
     """Fast inline suggestion for the next SQL tokens (streaming internally)."""
     db_type, schema_ctx = _get_context(connection_id, req.database)
+    # Header instruction intentionally omitted for inline autocomplete (too noisy)
     agent = InlineAutocompleteAgent(db_type, schema_ctx)
     suggestion = await agent.suggest(req.partial_sql, req.provider, req.model)
     return {"suggestion": suggestion}
@@ -77,8 +80,9 @@ async def autocomplete(connection_id: str, req: AutocompleteRequest):
 async def complete_query(connection_id: str, req: CompleteRequest):
     """Generate a full SQL query from partial editor content (Tab key trigger)."""
     db_type, schema_ctx = _get_context(connection_id, req.database)
+    header = _build_header_instruction(req.ai_header_enabled, req.ai_header_author)
     agent = FullQueryAgent(db_type, schema_ctx)
-    sql = await agent.generate(req.context, req.provider, req.model)
+    sql = await agent.generate(req.context, req.provider, req.model, header_instruction=header)
     return {"sql": sql}
 
 
@@ -86,12 +90,16 @@ async def complete_query(connection_id: str, req: CompleteRequest):
 async def text_to_sql(connection_id: str, req: TextToSQLRequest):
     """Convert natural language description to SQL (supports multi-turn history)."""
     db_type, schema_ctx = _get_context(connection_id, req.database)
+    header = _build_header_instruction(req.ai_header_enabled, req.ai_header_author)
     agent = TextToSQLAgent(db_type, schema_ctx)
     history = (
         [{"role": m.role, "content": m.content} for m in req.history]
         if req.history else None
     )
-    sql = await agent.convert(req.description, req.provider, req.model, history=history, mode=req.mode)
+    sql = await agent.convert(
+        req.description, req.provider, req.model,
+        history=history, mode=req.mode, header_instruction=header,
+    )
     return {"sql": sql}
 
 
@@ -179,6 +187,17 @@ def list_models(provider: str | None = None):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _build_header_instruction(enabled: bool, author: str) -> str:
+    """Return the header instruction string to append to the system prompt, or empty string."""
+    if not enabled:
+        return ""
+    from datetime import datetime
+    from backend.agent.prompts import SQL_HEADER_INSTRUCTION
+    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+    author_line = f"-- Author   : {author.strip()}\n" if author.strip() else ""
+    return SQL_HEADER_INSTRUCTION.format(timestamp=timestamp, author_line=author_line)
+
 
 def _get_context(connection_id: str, database: str | None) -> tuple[str, str]:
     """Return (db_type, schema_context_string) for the connection."""
